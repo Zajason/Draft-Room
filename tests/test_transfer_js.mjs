@@ -1,5 +1,5 @@
 import fs from 'fs';
-const src=fs.readFileSync('/tmp/engine.js','utf8');
+const src=fs.readFileSync(new URL('../eldraft/web/engine.js', import.meta.url),'utf8');
 eval(src+'\nglobalThis.transferDP=transferDP;');
 function structVal(codes,byCode,rules){const out=[];let coach=0;
   codes.forEach(c=>{const p=byCode[c];if(p.pos==='H')coach+=p.fp;else out.push(p.fp);});

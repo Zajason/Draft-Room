@@ -4,7 +4,11 @@
 
 ### Advanced-analytics squad building for the EuroLeague Fantasy Challenge
 
-Real data · an **exact** squad optimiser · an **AlphaZero-style draft lookahead** · a **matchup-aware weekly transfer engine** — all validated with three honest backtests.
+Real data · an **exact** squad optimiser · an **AlphaZero-style draft lookahead** · a **matchup-aware weekly transfer engine** — all validated with three honest backtests and a projection-model bake-off.
+
+[![tests](https://github.com/Zajason/Draft-Room/actions/workflows/ci.yml/badge.svg)](https://github.com/Zajason/Draft-Room/actions/workflows/ci.yml)
+&nbsp;![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
+&nbsp;[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
 
@@ -37,6 +41,9 @@ Nothing is hand-entered — the whole pipeline runs from public feeds. And every
 <tr>
 <td><img src="docs/img/02_recommended_squad.png" alt="Recommended squad"><br><em>The exact optimiser's squad — starting six, bench, captain and coach, within budget.</em></td>
 <td><img src="docs/img/03_club_depth.png" alt="Club depth charts"><br><em>Projected minutes for all 20 clubs — where "fit" and rotation risk live.</em></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/img/07_scouting_radar.png" alt="Player scouting card with 2K-style radar"><br><em>Every pick has an NBA-2K-style scouting card — the radar shows attribute percentiles within position; the profile bars and the round-by-round form come straight from the box scores.</em></td>
 </tr>
 </table>
 
@@ -168,6 +175,23 @@ A 10-team snake draft, then hold and manage the roster with waivers.
 
 ---
 
+# Research — which projection algorithm actually wins?
+
+Rather than assert the model is good, it's put in a bake-off against alternatives, **out of sample**, averaged over two seasons each predicted from strictly earlier data (`python -m eldraft.cli bakeoff`):
+
+![Model bake-off](docs/img/08_model_bakeoff.png)
+
+| Projection model | Rank corr. | Top-decile hit | MAE ↓ | Top-10 real PIR |
+|---|---|---|---|---|
+| Naive (last season) | 0.609 | 0.294 | 3.20 | 12.2 |
+| 3-yr weighted avg | 0.592 | 0.324 | 3.10 | 11.1 |
+| Ridge regression (ML, from scratch) | 0.623 | 0.294 | **2.85** | **12.7** |
+| **Draft Room (full)** | **0.642** | **0.324** | 2.98 | 11.2 |
+| — no age curve (ablation) | 0.641 | 0.324 | 3.02 | 11.4 |
+| — no shrinkage (ablation) | 0.632 | 0.324 | 3.09 | 11.5 |
+
+**The honest finding: no model dominates.** The production model (empirical-Bayes shrinkage + age curve + the 200-minute depth chart) wins on **rank correlation** and ties best on the **top-decile hit rate** — the metric fantasy actually rewards, since you live and die by whether your top picks are studs. A from-scratch **ridge-regression ML baseline** is the best-*calibrated* (lowest MAE) precisely because it regresses to the mean — which also makes it *worse* at the elite tail. And "just repeat last season" is a stubbornly strong baseline. The **ablations** show the age curve barely moves the needle while shrinkage helps a little — a result that argues for a *simpler* model, not a fancier one. Ridge is implemented in ~15 lines of NumPy (closed-form, standardised, temporal cross-validation), no scikit-learn.
+
 # Quickstart
 
 ```bash
@@ -222,12 +246,14 @@ eldraft/
   season_backtest.py     out-of-sample weekly replay (tests prediction)
   strategy_backtest.py   classic + draft replays on real ability, with injuries
   backtest.py     out-of-sample projection validation
+  bakeoff.py      projection-model bake-off (naive / weighted / ridge-ML / ablations)
   excel_io.py     availability spreadsheet ingest
   dashboard.py    builds the Scout dashboard
   live.py         builds the Squad Room (weekly + draft), in-browser engines
   web/            the JS engines (exact DP + MCTS) + app, verified against Python
   cli.py          command line
 tests/            brute-force checks for the exact DP and the transfer DP
+.github/          CI: runs the brute-force correctness tests on every push
 docs/             self-contained demo builds + screenshots (GitHub Pages ready)
 ```
 

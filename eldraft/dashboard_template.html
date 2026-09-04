@@ -951,6 +951,54 @@ function classicRace(C) {
   return svg;
 }
 
+
+function bakeoffCard() {
+  const bk = DATA.bakeoff, M = bk.models;
+  const card = el("div", { class: "card pad", style: "margin-bottom:16px" });
+  card.appendChild(el("h3", { class: "subh", text: "Model bake-off — which projection algorithm actually wins?" }));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:0 0 12px;max-width:80ch",
+    text: "Six projection algorithms compared out-of-sample, averaged over " + bk.seasons.join(" and ") +
+      " (a season each model predicted from strictly earlier data). Rank corr. and top-decile hit measure " +
+      "ordering; MAE measures calibration; top-10 real is the mean actual PIR/round of the ten players each " +
+      "model liked most. Best in each column is highlighted." }));
+  const cols = [["spearman", "Rank corr.", true], ["top_decile", "Top-decile hit", true],
+                ["mae", "MAE (lower better)", false], ["top10_actual", "Top-10 real PIR", true]];
+  // find best per column
+  const names = Object.keys(M);
+  const best = {};
+  cols.forEach(([k, , hi]) => {
+    let bn = names[0];
+    names.forEach(n => { if (hi ? M[n][k] > M[bn][k] : M[n][k] < M[bn][k]) bn = n; });
+    best[k] = bn;
+  });
+  const t = el("table", { class: "htable vtable", style: "min-width:0" });
+  t.innerHTML = "<thead><tr><th>Projection model</th>" +
+    cols.map(c => '<th class="num">' + c[1] + "</th>").join("") + "</tr></thead>";
+  const tb = el("tbody");
+  names.forEach(n => {
+    const ablation = n.trim().startsWith("–");
+    const tr = el("tr", { style: ablation ? "color:var(--ink-3)" : "" });
+    tr.appendChild(el("td", { html: (n.indexOf("Draft Room") >= 0 ? "<b>" + n + "</b>" : n) }));
+    cols.forEach(([k]) => {
+      const isBest = best[k] === n;
+      tr.appendChild(el("td", { class: "num",
+        html: isBest ? '<b style="color:var(--good)">' + M[n][k] + "</b>" : String(M[n][k]) }));
+    });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  card.appendChild(el("div", { class: "tablewrap" }, [t]));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:10px 0 0",
+    text: "The honest read: no model dominates. The production model (shrinkage + age curve + a 200-minute " +
+      "depth chart) wins on rank correlation and ties best at the elite tail — the metric fantasy actually rewards — " +
+      "while a from-scratch ridge-regression ML baseline is best-calibrated (MAE) by regressing to the mean, and " +
+      "even \"repeat last season\" is a strong baseline. The ablations show the age curve barely moves the needle " +
+      "while shrinkage helps — a small, honest result that argues for a simpler model, not a fancier one. " +
+      "(True top-10 ceiling this window: " + bk.ceiling_top10 + " PIR/round.)" }));
+  return card;
+}
+
+function bakeoffCard_end() {}
 function renderModel() {
   const host = $("#view-model"); host.innerHTML = "";
   host.appendChild(el("div", { class: "sechead" }, [
@@ -961,6 +1009,7 @@ function renderModel() {
 
   if (DATA.seasonTest) { host.appendChild(seasonTestCard()); }
   if (DATA.strategyTest) { host.appendChild(strategyTestCard()); }
+  if (DATA.bakeoff) { host.appendChild(bakeoffCard()); }
 
   if (DATA.validation) {
     const card = el("div", { class: "card pad" });
@@ -1021,9 +1070,11 @@ function renderModel() {
 
 /* ------------------------------------------------------------------ radar */
 function radarSvg(p) {
-  const S = 250, cx = S / 2, cy = S / 2 - 4, R = 88;
+  // Wider than tall so the horizontal-extreme labels (Three-point / Playmaking / Efficiency)
+  // have room and are never clipped by the viewBox.
+  const WW = 380, HH = 250, cx = WW / 2, cy = HH / 2 - 2, R = 84;
   const axes = DATA.radar;
-  const svg = svgEl("svg", { viewBox: `0 0 ${S} ${S}`, width: "100%", role: "img",
+  const svg = svgEl("svg", { viewBox: `0 0 ${WW} ${HH}`, width: "100%", role: "img",
     "aria-label": "Attribute radar; every axis is this player's percentile among players at his position" });
   const pt = (i, r) => {
     const a = -Math.PI / 2 + i * 2 * Math.PI / axes.length;
@@ -1052,7 +1103,7 @@ function radarSvg(p) {
       stroke: cssv("--card"), "stroke-width": 1.5 }));
   });
   axes.forEach(([k, label], i) => {
-    const [x, y] = pt(i, R + 21);
+    const [x, y] = pt(i, R + 18);
     const t = svgEl("text", { x, y: y + 3, "text-anchor": Math.abs(x - cx) < 6 ? "middle" : (x > cx ? "start" : "end"),
       fill: cssv("--ink-3"), "font-size": 9.5, "font-family": "IBM Plex Sans, sans-serif", "font-weight": 600 });
     t.textContent = label;
@@ -1260,6 +1311,31 @@ renderHeader();
 (function(){
   var h = (location.hash || "").replace(/^#/, "");
   setView(["board","squad","clubs","model"].indexOf(h) >= 0 ? h : "board");
+})();
+(function(){
+  var focus = new URLSearchParams(location.search).get("focus");
+  if (focus) {
+    var h = (location.hash || "").replace(/^#/, "");
+    setView(["board","squad","clubs","model"].indexOf(h) >= 0 ? h : "model");
+    setTimeout(function(){
+      var cards = [].slice.call(document.querySelectorAll("section:not(.hide) .card"));
+      var card = cards.filter(function(c){ return c.textContent.toLowerCase().indexOf(focus.toLowerCase()) >= 0; })[0];
+      if (card) { card.scrollIntoView({ block: "start" }); window.scrollBy(0, -60); }
+    }, 150);
+  }
+})();
+(function(){
+  var pc = new URLSearchParams(location.search).get("player");
+  if (!pc) return;
+  setView("board");
+  setTimeout(function(){
+    openDrawer(pc);
+    setTimeout(function(){
+      var svgs = [].slice.call(drawer.querySelectorAll("svg"));
+      var rad = svgs.filter(function(s){ return (s.getAttribute("aria-label")||"").indexOf("radar") >= 0; })[0];
+      if (rad) rad.scrollIntoView({ block: "center" });
+    }, 80);
+  }, 40);
 })();
 
 </script>

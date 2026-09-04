@@ -1,6 +1,8 @@
 """Brute-force check that the DP returns the true optimum of the structured objective."""
 import itertools, random, sys
 import numpy as np
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from eldraft.optimize import SquadDP, Slots
 from eldraft.config import GameRules
 

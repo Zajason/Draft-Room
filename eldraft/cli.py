@@ -136,6 +136,19 @@ def cmd_live(args) -> int:
     return 0
 
 
+def cmd_bakeoff(args) -> int:
+    from .bakeoff import report
+    r = report(tuple(args.seasons))
+    print("\nModel bake-off - out of sample, averaged over {}\n".format(", ".join(r["seasons"])))
+    print("  {:<26}{:>9}{:>13}{:>8}{:>13}".format("model", "rankcorr", "top-decile", "MAE", "top10 real"))
+    for name, m in r["models"].items():
+        print("  {:<26}{:>9.3f}{:>13.3f}{:>8.2f}{:>13.1f}".format(
+            name, m["spearman"], m["top_decile"], m["mae"], m["top10_actual"]))
+    print("\n  true top-10 ceiling this window: {} PIR/round".format(r["ceiling_top10"]))
+    print("-> out/bakeoff.json")
+    return 0
+
+
 def cmd_strategy_backtest(args) -> int:
     from .strategy_backtest import run_report
     r = run_report(args.season)
@@ -254,6 +267,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     sb.add_argument("--season", default="E2025")
     sb.add_argument("--field", type=int, default=40)
     sb.set_defaults(fn=cmd_season_backtest)
+
+    bo = sub.add_parser("bakeoff", help="compare projection algorithms out of sample")
+    bo.add_argument("--seasons", nargs="+", default=["E2025", "E2024"])
+    bo.set_defaults(fn=cmd_bakeoff)
 
     stb = sub.add_parser("strategy-backtest",
                          help="classic + draft backtests using last season's realised stats")

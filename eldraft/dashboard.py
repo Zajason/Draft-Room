@@ -210,6 +210,11 @@ def build_payload(board: dict, sims: int = 400) -> dict:
     if os.path.exists(stpath):
         with open(stpath) as fh:
             strategy_test = json.load(fh)
+    bakeoff = None
+    bpath = os.path.join(OUT, "bakeoff.json")
+    if os.path.exists(bpath):
+        with open(bpath) as fh:
+            bakeoff = json.load(fh)
 
     return {
         "meta": dict(board["meta"], generatedFor=TARGET_SEASON),
@@ -236,6 +241,7 @@ def build_payload(board: dict, sims: int = 400) -> dict:
         "validation": validation,
         "seasonTest": season_test,
         "strategyTest": strategy_test,
+        "bakeoff": bakeoff,
     }
 
 
