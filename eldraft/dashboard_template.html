@@ -1,0 +1,1265 @@
+<meta charset="utf-8">
+<title>EuroLeague Draft Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ============================== tokens ==============================
+   Light is the base; the two dark scopes redefine only the token values so an
+   explicit theme choice beats the OS setting in both directions. */
+:root{
+  color-scheme: light;
+  --page:#E9ECEF; --card:#FFFFFF; --card-2:#F3F5F8; --line:#D3D9E0; --line-soft:#E4E8ED;
+  --ink:#0F1319; --ink-2:#48525F; --ink-3:#6E7986;
+  --accent:#A8701A; --accent-ink:#7A5210; --accent-wash:#F6EBD8;
+  --pos-g:#2a78d6; --pos-f:#eb6834; --pos-c:#1baf7a; --pos-h:#6E7986;
+  --good:#1F7A4C; --warn:#A8701A; --crit:#B23A2C;
+  --grid:#E4E8ED; --shadow:0 1px 2px rgba(15,19,25,.06),0 8px 24px -12px rgba(15,19,25,.18);
+  --series-hold:#1baf7a; --series-static:#e34948; --series-ceiling:#6E7986;
+  --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --page:#0C1014; --card:#151A20; --card-2:#1B2129; --line:#28313B; --line-soft:#1F262E;
+    --ink:#E8EDF3; --ink-2:#9BA7B4; --ink-3:#78838F;
+    --accent:#E0A93C; --accent-ink:#F0C36B; --accent-wash:#2A2113;
+    --pos-g:#3987e5; --pos-f:#d95926; --pos-c:#199e70; --pos-h:#78838F;
+    --good:#3FA76B; --warn:#D19A33; --crit:#E15B4C;
+    --grid:#222A33; --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -14px rgba(0,0,0,.7);
+    --series-hold:#199e70; --series-static:#e66767; --series-ceiling:#9BA7B4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:#0C1014; --card:#151A20; --card-2:#1B2129; --line:#28313B; --line-soft:#1F262E;
+  --ink:#E8EDF3; --ink-2:#9BA7B4; --ink-3:#78838F;
+  --accent:#E0A93C; --accent-ink:#F0C36B; --accent-wash:#2A2113;
+  --pos-g:#3987e5; --pos-f:#d95926; --pos-c:#199e70; --pos-h:#78838F;
+  --good:#3FA76B; --warn:#D19A33; --crit:#E15B4C;
+  --grid:#222A33; --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -14px rgba(0,0,0,.7);
+  --series-hold:#199e70; --series-static:#e66767; --series-ceiling:#9BA7B4;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; background:var(--page); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.disp{font-family:"Saira Condensed","Oswald",Impact,system-ui,sans-serif;
+  font-weight:600; letter-spacing:.01em; margin:0; text-wrap:balance}
+.mono,td.num,th.num,.num{font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+a{color:var(--accent-ink)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ============================== chrome ============================== */
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 72px}
+header.top{
+  position:sticky; top:0; z-index:40; background:var(--page);
+  border-bottom:1px solid var(--line); padding:14px 0 0;
+}
+.topgrid{max-width:1500px;margin:0 auto;padding:0 20px;
+  display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+.brand .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.brand h1{font-size:34px;line-height:1;letter-spacing:.005em}
+.brand h1 em{font-style:normal;color:var(--accent-ink)}
+.hstats{display:flex;gap:22px;flex-wrap:wrap;padding-bottom:2px}
+.hstat{display:flex;flex-direction:column;gap:1px;min-width:78px}
+.hstat b{font-family:"Saira Condensed",sans-serif;font-size:24px;line-height:1.05;font-weight:700;
+  font-variant-numeric:tabular-nums}
+.hstat span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.tabs{display:flex;gap:2px;margin-top:12px;overflow-x:auto}
+.tab{appearance:none;border:0;background:transparent;color:var(--ink-3);cursor:pointer;
+  font:600 12px/1 "IBM Plex Sans",sans-serif; letter-spacing:.09em;text-transform:uppercase;
+  padding:11px 15px; border-bottom:2px solid transparent; white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.themebtn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink-2);
+  border-radius:999px;padding:5px 12px;font:600 11px/1 "IBM Plex Sans",sans-serif;cursor:pointer;
+  letter-spacing:.06em}
+.themebtn:hover{color:var(--ink);border-color:var(--ink-3)}
+
+/* ============================== primitives ============================== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.sechead{display:flex;align-items:baseline;gap:12px;margin:26px 0 12px;flex-wrap:wrap}
+.sechead h2{font-size:19px;letter-spacing:.02em}
+.sechead p{margin:0;color:var(--ink-3);font-size:12.5px;max-width:70ch}
+.grid{display:grid;gap:14px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 8px;
+  font:600 10.5px/1.6 "IBM Plex Sans",sans-serif;letter-spacing:.05em;text-transform:uppercase}
+.pos{width:19px;height:19px;border-radius:5px;display:inline-grid;place-items:center;
+  font:700 10.5px/1 "IBM Plex Sans",sans-serif;color:#fff;flex:none}
+.pos.G{background:var(--pos-g)} .pos.F{background:var(--pos-f)}
+.pos.C{background:var(--pos-c)} .pos.H{background:var(--pos-h)}
+.avatar{border-radius:50%;overflow:hidden;display:inline-grid;place-items:center;flex:none;background:var(--card-2);box-shadow:inset 0 0 0 1px var(--line-soft)}
+.avatar img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+.avatar.ini{color:#fff;font-family:"IBM Plex Sans",sans-serif;font-weight:600}
+.crest{object-fit:contain;flex:none;vertical-align:-3px}
+.bar{height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden}
+.bar > i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.muted{color:var(--ink-3)}
+.tiny{font-size:11px}
+
+/* ============================== controls ============================== */
+.controls{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+input[type="search"],select{
+  font:500 13px/1 "IBM Plex Sans",sans-serif;color:var(--ink);background:var(--card);
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+input[type="search"]{min-width:210px}
+.chips{display:flex;gap:3px;background:var(--card);border:1px solid var(--line);
+  border-radius:8px;padding:3px}
+.chip{appearance:none;border:0;background:transparent;color:var(--ink-3);cursor:pointer;
+  font:600 11.5px/1 "IBM Plex Sans",sans-serif;padding:6px 11px;border-radius:6px;letter-spacing:.04em}
+.chip[aria-pressed="true"]{background:var(--card-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.chip:hover{color:var(--ink)}
+
+/* ============================== table ============================== */
+.tablewrap{overflow:auto;border-radius:var(--radius);max-height:calc(100dvh - 250px)}
+.drawer .tablewrap,.vtable-wrap{max-height:none}
+table{border-collapse:collapse;width:100%;min-width:1020px;font-size:13px}
+thead th{
+  position:sticky;top:0;z-index:5;background:var(--card-2);
+  font:600 10px/1.4 "IBM Plex Sans",sans-serif;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);
+  cursor:pointer;white-space:nowrap;user-select:none}
+thead th.num{text-align:right}
+thead th[aria-sort]{color:var(--ink)}
+thead th[aria-sort]::after{content:"";display:inline-block;margin-left:5px;
+  border:4px solid transparent}
+thead th[aria-sort="descending"]::after{border-top-color:var(--accent);transform:translateY(2px)}
+thead th[aria-sort="ascending"]::after{border-bottom-color:var(--accent);transform:translateY(-2px)}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+tbody td.num{text-align:right}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--card-2)}
+tbody tr.mine{background:color-mix(in srgb,var(--good) 9%,transparent)}
+tbody tr.insquad td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tbody tr.gone{opacity:.42}
+.pname{display:flex;align-items:center;gap:8px;font-weight:500}
+.pname small{color:var(--ink-3);font-weight:400}
+.dvbar{display:flex;align-items:center;gap:7px;justify-content:flex-end}
+.dvbar .bar{width:52px;flex:none}
+.rat{display:inline-grid;place-items:center;width:30px;height:22px;border-radius:5px;
+  font:600 12px/1 "IBM Plex Mono",monospace;background:var(--card-2);
+  box-shadow:inset 0 0 0 1px var(--line)}
+
+/* ============================== squad ============================== */
+.lineup{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:13px 14px;display:flex;flex-direction:column;gap:9px;cursor:pointer;position:relative;
+  box-shadow:var(--shadow)}
+.pcard:hover{border-color:var(--ink-3)}
+.pcard .role{position:absolute;top:11px;right:12px;font:600 9.5px/1 "IBM Plex Sans",sans-serif;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.pcard.captain{border-color:var(--accent)}
+.pcard.captain .role{color:var(--accent-ink)}
+.pcard h3{font-size:17px;letter-spacing:.015em;padding-right:52px}
+.pcard .meta{display:flex;align-items:center;gap:7px;color:var(--ink-3);font-size:11.5px}
+.pcard .nums{display:flex;gap:14px;margin-top:2px}
+.pcard .nums div{display:flex;flex-direction:column}
+.pcard .nums b{font:600 17px/1.1 "IBM Plex Mono",monospace}
+.pcard .nums span{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.budget{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.budget .bar{flex:1;min-width:180px;height:9px}
+.slotrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.slot{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;
+  padding:5px 10px;font-size:12px;background:var(--card)}
+.slot b{font-family:"IBM Plex Mono",monospace}
+
+/* ============================== drawer ============================== */
+.scrim{position:fixed;inset:0;background:rgba(6,9,12,.5);z-index:60;opacity:0;pointer-events:none;
+  transition:opacity .18s ease}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100dvh;width:min(560px,100vw);z-index:70;
+  background:var(--card);border-left:1px solid var(--line);overflow-y:auto;
+  transform:translateX(100%);transition:transform .22s cubic-bezier(.3,.7,.3,1);
+  box-shadow:-24px 0 60px -30px rgba(0,0,0,.6)}
+.drawer.open{transform:none}
+.drawer .dhead{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);
+  padding:16px 20px 13px;z-index:2}
+.drawer .dbody{padding:16px 20px 60px;display:flex;flex-direction:column;gap:20px}
+.closebtn{position:absolute;top:14px;right:16px;appearance:none;border:1px solid var(--line);
+  background:var(--card-2);color:var(--ink-2);border-radius:7px;width:28px;height:28px;cursor:pointer;
+  font-size:15px;line-height:1}
+.closebtn:hover{color:var(--ink)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:11px}
+.kv div{display:flex;flex-direction:column;gap:1px}
+.kv b{font:600 16px/1.2 "IBM Plex Mono",monospace}
+.kv span{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.attr{display:grid;grid-template-columns:1fr;gap:6px}
+.attrrow{display:grid;grid-template-columns:118px 1fr 30px;gap:9px;align-items:center;font-size:12px}
+.attrrow .bar{height:7px}
+.attrrow em{font-style:normal;font-family:"IBM Plex Mono",monospace;text-align:right;font-size:11.5px}
+.subh{font:600 10px/1 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 9px}
+.htable{width:100%;min-width:0;font-size:12px}
+.htable th{position:sticky;top:0;padding:6px 7px;font-size:9.5px}
+.htable td{padding:6px 7px}
+.note{font-size:12px;color:var(--ink-2);background:var(--card-2);border:1px solid var(--line-soft);
+  border-radius:8px;padding:10px 12px;line-height:1.5}
+
+/* ============================== charts ============================== */
+svg{display:block;max-width:100%}
+.tip{position:fixed;z-index:90;pointer-events:none;background:var(--card);border:1px solid var(--line);
+  border-radius:8px;padding:7px 10px;font-size:12px;box-shadow:var(--shadow);opacity:0;
+  transition:opacity .1s;max-width:250px}
+.tip.on{opacity:1}
+.tip b{font-family:"Saira Condensed",sans-serif;font-size:14px;letter-spacing:.02em}
+.tip .row{display:flex;justify-content:space-between;gap:14px;font-family:"IBM Plex Mono",monospace;
+  font-size:11px;color:var(--ink-2)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.two{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:1080px){.two{grid-template-columns:1.35fr 1fr}}
+.clubgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.depth{display:flex;flex-direction:column;gap:4px;margin-top:9px}
+.drow{display:grid;grid-template-columns:15px 1fr 34px;gap:8px;align-items:center;font-size:12px;
+  cursor:pointer}
+.drow:hover .dname{color:var(--accent-ink)}
+.dname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbar{height:16px;border-radius:4px;background:var(--line-soft);position:relative;overflow:hidden}
+/* The fill is a tint with a solid leading edge, so the name on top of it stays legible
+   in both themes instead of relying on white text over a saturated bar. */
+.dbar i{position:absolute;inset:0 auto 0 0;border-radius:4px;opacity:.30;
+  border-left:3px solid currentColor}
+.dbar em{position:absolute;left:9px;top:0;line-height:16px;font-style:normal;font-size:10.5px;
+  color:var(--ink);font-weight:500;right:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vtable td,.vtable th{white-space:normal}
+.hide{display:none!important}
+</style>
+
+<header class="top">
+  <div class="topgrid">
+    <div class="brand">
+      <div class="kicker" id="kicker">Turkish Airlines EuroLeague</div>
+      <h1>Draft <em>Room</em></h1>
+    </div>
+    <div class="hstats" id="hstats"></div>
+    <a class="themebtn" id="squadlink" href="https://claude.ai/code/artifact/0ab25f71-7b20-4a17-b14e-7847a6e4e71e" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">↗ Squad Room</a>
+    <button class="themebtn" id="theme" type="button">Theme</button>
+  </div>
+  <div class="topgrid">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" data-view="board" aria-selected="true">Draft board</button>
+      <button class="tab" role="tab" data-view="squad" aria-selected="false">Recommended squad</button>
+      <button class="tab" role="tab" data-view="clubs" aria-selected="false">Club depth charts</button>
+      <button class="tab" role="tab" data-view="model" aria-selected="false">How it decides</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section id="view-board"></section>
+  <section id="view-squad" class="hide"></section>
+  <section id="view-clubs" class="hide"></section>
+  <section id="view-model" class="hide"></section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" tabindex="-1"></aside>
+<div class="tip" id="tip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+</script>
+<script>
+"use strict";
+/* ------------------------------------------------------------------ helpers */
+const $ = (s, r) => (r || document).querySelector(s);
+const el = (tag, attrs, kids) => {
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    if (k === "class") n.className = attrs[k];
+    else if (k === "html") n.innerHTML = attrs[k];
+    else if (k === "text") n.textContent = attrs[k];
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  }
+  (kids || []).forEach(c => n.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+  return n;
+};
+const svgEl = (tag, attrs) => {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  return n;
+};
+const n1 = v => v === null || v === undefined ? "–" : (+v).toFixed(1);
+const n2 = v => v === null || v === undefined ? "–" : (+v).toFixed(2);
+const n0 = v => v === null || v === undefined ? "–" : Math.round(v).toString();
+const pct = v => v === null || v === undefined ? "–" : Math.round(v * 100) + "%";
+const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const POSC = { G: "--pos-g", F: "--pos-f", C: "--pos-c", H: "--pos-h" };
+const posColor = p => cssv(POSC[p] || "--pos-h");
+const CREST = DATA.crests || {};
+const initials = name => (name || "").split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+function avatar(p, size) {
+  size = size || 26;
+  const w = el("span", { class: "avatar", style: `width:${size}px;height:${size}px` });
+  if (p.photo) w.appendChild(el("img", { src: p.photo, alt: "", loading: "lazy" }));
+  else { w.classList.add("ini"); w.style.background = posColor(p.pos); w.style.fontSize = Math.round(size * 0.36) + "px"; w.textContent = initials(p.name); }
+  return w;
+}
+function crestImg(code, size) {
+  size = size || 16; const u = CREST[code];
+  return u ? el("img", { class: "crest", src: u, alt: "", style: `width:${size}px;height:${size}px` }) : el("span", { style: `width:${size}px;display:inline-block` });
+}
+const POSNAME = { G: "Guard", F: "Forward", C: "Centre", H: "Head coach" };
+
+const ALL = DATA.players.concat(DATA.coaches);
+const BY = {}; ALL.forEach(p => BY[p.code] = p);
+const CLUBBY = {}; DATA.clubs.forEach(c => CLUBBY[c.code] = c);
+
+const state = {
+  view: "board", pos: "ALL", club: "ALL", avail: "available",
+  q: "", sort: "draftValue", dir: -1, sel: null
+};
+
+/* ------------------------------------------------------------------ tooltip */
+const tip = $("#tip");
+function showTip(evt, html) {
+  tip.innerHTML = html; tip.classList.add("on");
+  const r = tip.getBoundingClientRect();
+  let x = evt.clientX + 14, y = evt.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = evt.clientY - r.height - 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => tip.classList.remove("on");
+
+/* ------------------------------------------------------------------ header */
+function renderHeader() {
+  $("#kicker").textContent = "Turkish Airlines EuroLeague · " +
+    (DATA.meta.target_season || "").replace(/^E(\d+)$/, (m, y) => y + "-" + String(+y + 1).slice(2)) +
+    " · projections built " + (DATA.meta.generated || "").slice(0, 10);
+  const avail = DATA.players.filter(p => p.available && !p.mine).length;
+  const mine = ALL.filter(p => p.mine);
+  const spent = mine.reduce((a, p) => a + (p.price || 0), 0);
+  const stats = [
+    [DATA.squadExpected.toFixed(1), "Proj. pts / round"],
+    [DATA.squadCost.toFixed(1) + " / " + DATA.rules.budget, "Credits"],
+    [String(avail), "Available"],
+    [String(DATA.clubs.length), "Clubs"],
+    [DATA.nSims.toLocaleString(), "Seasons simulated"]
+  ];
+  if (mine.length) stats.splice(2, 0, [mine.length + " · " + spent.toFixed(1) + "cr", "Already yours"]);
+  $("#hstats").innerHTML = stats.map(s =>
+    `<div class="hstat"><b>${s[0]}</b><span>${s[1]}</span></div>`).join("");
+}
+
+/* ------------------------------------------------------------------ filtering */
+function pool() {
+  let rows = ALL.slice();
+  if (state.pos !== "ALL") rows = rows.filter(p => p.pos === state.pos);
+  if (state.club !== "ALL") rows = rows.filter(p => p.club === state.club);
+  if (state.avail === "available") rows = rows.filter(p => p.available !== false);
+  else if (state.avail === "mine") rows = rows.filter(p => p.mine);
+  else if (state.avail === "squad") rows = rows.filter(p => p.inSquad);
+  if (state.q) {
+    const q = state.q.toLowerCase();
+    rows = rows.filter(p => p.name.toLowerCase().includes(q) ||
+      (p.clubName || "").toLowerCase().includes(q) || (p.country || "").toLowerCase().includes(q));
+  }
+  const k = state.sort, d = state.dir;
+  rows.sort((a, b) => {
+    let x = a[k], y = b[k];
+    if (k === "ovr") { x = (a.ratings || {}).overall; y = (b.ratings || {}).overall; }
+    if (k === "value") { x = (a.ratings || {}).value; y = (b.ratings || {}).value; }
+    if (x === null || x === undefined) x = -Infinity;
+    if (y === null || y === undefined) y = -Infinity;
+    if (typeof x === "string") return d * x.localeCompare(y);
+    return d * (x - y);
+  });
+  return rows;
+}
+
+/* ------------------------------------------------------------------ board view */
+const COLS = [
+  ["name", "Player", false], ["pos", "Pos", false], ["clubName", "Club", false],
+  ["price", "Cr", true], ["fp", "Proj", true], ["sigma", "± 1σ", true],
+  ["mptg", "Min", true], ["rate", "PIR/40", true],
+  ["ovr", "OVR", true], ["value", "VAL", true],
+  ["pickRate", "Pick %", true], ["draftValue", "Draft value", true]
+];
+
+function renderBoard() {
+  const host = $("#view-board");
+  host.innerHTML = "";
+  host.appendChild(el("div", { class: "sechead" }, [
+    el("h2", { text: "Draft board" }),
+    el("p", {
+      text: "Ranked by draft value: the fantasy points per round your finished squad loses if " +
+        "this player goes off the board. Positive means he belongs in the squad; the rest are " +
+        "priced by what they would add if you took them instead. Click any row to scout him."
+    })
+  ]));
+
+  const controls = el("div", { class: "controls" });
+  controls.appendChild(el("input", {
+    type: "search", placeholder: "Search player, club or country", value: state.q,
+    oninput: e => { state.q = e.target.value; paintTable(); }
+  }));
+  const chips = el("div", { class: "chips" });
+  [["ALL", "All"], ["G", "Guards"], ["F", "Forwards"], ["C", "Centres"], ["H", "Coaches"]]
+    .forEach(([v, label]) => chips.appendChild(el("button", {
+      class: "chip", "aria-pressed": String(state.pos === v), text: label,
+      onclick: () => { state.pos = v; renderBoard(); }
+    })));
+  controls.appendChild(chips);
+
+  const avail = el("div", { class: "chips" });
+  [["available", "Available"], ["squad", "In squad"], ["mine", "Mine"], ["all", "Everyone"]]
+    .forEach(([v, label]) => avail.appendChild(el("button", {
+      class: "chip", "aria-pressed": String(state.avail === v), text: label,
+      onclick: () => { state.avail = v; renderBoard(); }
+    })));
+  controls.appendChild(avail);
+
+  const sel = el("select", { onchange: e => { state.club = e.target.value; renderBoard(); } });
+  sel.appendChild(el("option", { value: "ALL", text: "All clubs" }));
+  DATA.clubs.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(c =>
+    sel.appendChild(el("option", { value: c.code, text: c.name, selected: state.club === c.code ? "" : null })));
+  controls.appendChild(sel);
+  host.appendChild(controls);
+
+  const two = el("div", { class: "two" });
+  const tcard = el("div", { class: "card" });
+  const tw = el("div", { class: "tablewrap", id: "tw" });
+  tcard.appendChild(tw);
+  two.appendChild(tcard);
+
+  const side = el("div", { class: "grid" });
+  side.appendChild(scatterCard());
+  side.appendChild(positionCard());
+  two.appendChild(side);
+  host.appendChild(two);
+  paintTable();
+}
+
+function paintTable() {
+  const rows = pool();
+  const tw = $("#tw"); if (!tw) return;
+  const table = el("table");
+  const thead = el("thead"); const tr = el("tr");
+  COLS.forEach(([k, label, isNum]) => {
+    const th = el("th", {
+      class: isNum ? "num" : "", text: label, scope: "col",
+      onclick: () => {
+        if (state.sort === k) state.dir *= -1;
+        else { state.sort = k; state.dir = (k === "name" || k === "clubName" || k === "pos") ? 1 : -1; }
+        paintTable();
+      }
+    });
+    if (state.sort === k) th.setAttribute("aria-sort", state.dir === 1 ? "ascending" : "descending");
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr); table.appendChild(thead);
+
+  const maxDV = Math.max(0.001, ...rows.map(r => Math.abs(r.draftValue || 0)));
+  const tb = el("tbody");
+  rows.slice(0, 400).forEach(p => {
+    const cls = [p.mine ? "mine" : "", p.inSquad ? "insquad" : "", p.available === false ? "gone" : ""]
+      .filter(Boolean).join(" ");
+    const row = el("tr", { class: cls, onclick: () => openDrawer(p.code), tabindex: "0" });
+    row.addEventListener("keydown", e => { if (e.key === "Enter") openDrawer(p.code); });
+    const nameCell = el("td", {}, [el("div", { class: "pname" }, [
+      avatar(p, 26),
+      el("span", { text: p.name }),
+      p.mine ? el("span", { class: "pill", style: "color:var(--good)", text: "yours" }) :
+        (p.inSquad ? el("span", { class: "pill", style: "color:var(--accent-ink)", text: "pick" }) : el("span"))
+    ])]);
+    row.appendChild(nameCell);
+    row.appendChild(el("td", {}, [el("span", { class: "pos " + p.pos, text: p.pos, title: POSNAME[p.pos] })]));
+    row.appendChild(el("td", { class: "muted" }, [el("div", { style: "display:flex;align-items:center;gap:6px" }, [crestImg(p.club, 16), el("span", { text: p.clubName || "" })])]));
+    row.appendChild(el("td", { class: "num", text: n1(p.price) }));
+    row.appendChild(el("td", { class: "num", text: n1(p.fp) }));
+    row.appendChild(el("td", { class: "num muted", text: n1(p.sigma) }));
+    row.appendChild(el("td", { class: "num", text: p.mptg === undefined ? "–" : n1(p.mptg) }));
+    row.appendChild(el("td", { class: "num", text: n1(p.rate) }));
+    const r = p.ratings || {};
+    row.appendChild(el("td", { class: "num" }, [ratChip(r.overall)]));
+    row.appendChild(el("td", { class: "num" }, [ratChip(r.value)]));
+    row.appendChild(el("td", { class: "num muted", text: p.pickRate === null || p.pickRate === undefined ? "–" : pct(p.pickRate) }));
+    const dv = p.draftValue;
+    const dvCell = el("td", { class: "num" });
+    const wrapd = el("div", { class: "dvbar" });
+    wrapd.appendChild(el("span", { class: "mono", text: dv === null || dv === undefined ? "–" : (dv > 0 ? "+" : "") + n2(dv) }));
+    const bar = el("div", { class: "bar" });
+    const w = dv ? Math.min(100, Math.abs(dv) / maxDV * 100) : 0;
+    bar.appendChild(el("i", { style: `width:${w}%;background:${dv > 0 ? "var(--accent)" : "var(--line)"}` }));
+    wrapd.appendChild(bar); dvCell.appendChild(wrapd); row.appendChild(dvCell);
+    tb.appendChild(row);
+  });
+  table.appendChild(tb);
+  tw.innerHTML = "";
+  tw.appendChild(table);
+  if (rows.length > 400) tw.appendChild(el("div", { class: "pad tiny muted", text: `Showing the first 400 of ${rows.length} rows — narrow the filters to see the rest.` }));
+  if (!rows.length) tw.appendChild(el("div", { class: "pad muted", text: "No players match these filters." }));
+}
+
+function ratChip(v) {
+  if (v === null || v === undefined) return el("span", { class: "muted", text: "–" });
+  const t = Math.max(0, Math.min(1, (v - 40) / 59));
+  const c = t > .78 ? "var(--good)" : t > .45 ? "var(--accent-ink)" : "var(--ink-2)";
+  return el("span", { class: "rat", style: `color:${c}`, text: String(v) });
+}
+
+/* ------------------------------------------------------------------ scatter: price vs projection */
+function scatterCard() {
+  const card = el("div", { class: "card pad" });
+  card.appendChild(el("h3", { class: "subh", text: "Credits against projection" }));
+  const modelled = ALL.filter(p => p.priceSource === "model").length;
+  const modelShare = modelled / Math.max(1, ALL.length);
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:0 0 10px",
+    html: "Every available player. The line is the efficiency frontier — the most projected points on offer at each price. Anyone well below it is being outperformed by someone cheaper." +
+      (modelShare > 0.5
+        ? " <b>These prices are modelled from the projections</b>, so the cloud sits close to the frontier by construction. Load the app's real credits through an availability sheet and the genuine bargains separate out."
+        : "") }));
+  const W = 430, H = 300, PL = 34, PR = 12, PT = 10, PB = 30;
+  const pts = ALL.filter(p => p.available !== false && p.pos !== "H" && p.price);
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Scatter plot of credit cost against projected fantasy points per round" });
+  const xs = pts.map(p => p.price), ys = pts.map(p => p.fp || 0);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y1 = Math.max(...ys) * 1.06;
+  const X = v => PL + (v - x0) / (x1 - x0 || 1) * (W - PL - PR);
+  const Y = v => H - PB - (v / (y1 || 1)) * (H - PT - PB);
+
+  for (let g = 0; g <= 4; g++) {
+    const v = y1 * g / 4;
+    svg.appendChild(svgEl("line", { x1: PL, x2: W - PR, y1: Y(v), y2: Y(v), stroke: cssv("--grid"), "stroke-width": 1 }));
+    const t = svgEl("text", { x: PL - 6, y: Y(v) + 3.5, "text-anchor": "end", fill: cssv("--ink-3"),
+      "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = v.toFixed(0); svg.appendChild(t);
+  }
+  [4, 8, 12, 16].filter(v => v >= x0 - .5 && v <= x1 + .5).forEach(v => {
+    const t = svgEl("text", { x: X(v), y: H - PB + 14, "text-anchor": "middle", fill: cssv("--ink-3"),
+      "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = v + "cr"; svg.appendChild(t);
+  });
+
+  // efficiency frontier: best projection available at or below each price point
+  const byPrice = {};
+  pts.forEach(p => { const k = p.price; if (!byPrice[k] || p.fp > byPrice[k].fp) byPrice[k] = p; });
+  const prices = Object.keys(byPrice).map(Number).sort((a, b) => a - b);
+  let best = -Infinity; const front = [];
+  prices.forEach(pr => { const f = byPrice[pr].fp; if (f > best) { best = f; front.push([pr, f]); } });
+  if (front.length > 1) {
+    svg.appendChild(svgEl("path", {
+      d: front.map((f, i) => (i ? "L" : "M") + X(f[0]) + " " + Y(f[1])).join(" "),
+      fill: "none", stroke: cssv("--accent"), "stroke-width": 2, "stroke-linejoin": "round",
+      "stroke-dasharray": "5 4", opacity: .85
+    }));
+  }
+  pts.forEach(p => {
+    const c = svgEl("circle", { cx: X(p.price), cy: Y(p.fp || 0), r: p.inSquad ? 5.5 : 3.4,
+      fill: posColor(p.pos), stroke: cssv("--card"), "stroke-width": p.inSquad ? 2 : 1,
+      opacity: p.inSquad ? 1 : .72, style: "cursor:pointer" });
+    c.addEventListener("mousemove", e => showTip(e,
+      `<b>${p.name}</b><div class="row"><span>${POSNAME[p.pos]} · ${p.clubName || ""}</span></div>
+       <div class="row"><span>Cost</span><span>${n1(p.price)} cr</span></div>
+       <div class="row"><span>Projection</span><span>${n1(p.fp)} ± ${n1(p.sigma)}</span></div>
+       <div class="row"><span>Per credit</span><span>${n2(p.ppc)}</span></div>`));
+    c.addEventListener("mouseleave", hideTip);
+    c.addEventListener("click", () => openDrawer(p.code));
+    svg.appendChild(c);
+  });
+  card.appendChild(svg);
+  card.appendChild(el("div", { class: "legend", html:
+    `<span><i style="background:${cssv("--pos-g")}"></i>Guard</span>
+     <span><i style="background:${cssv("--pos-f")}"></i>Forward</span>
+     <span><i style="background:${cssv("--pos-c")}"></i>Centre</span>
+     <span><i style="background:${cssv("--accent")};border-radius:1px;height:3px"></i>Efficiency frontier</span>` }));
+  return card;
+}
+
+/* ------------------------------------------------------------------ position scarcity */
+function positionCard() {
+  const card = el("div", { class: "card pad" });
+  card.appendChild(el("h3", { class: "subh", text: "Where the points are" }));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:0 0 12px",
+    text: "Projected points per round for the best available players at each position, next to how many you must field. A steep drop-off after the slots you need is what makes a position scarce." }));
+  const need = DATA.rules.slots;
+  ["G", "F", "C"].forEach(pos => {
+    const list = ALL.filter(p => p.pos === pos && p.available !== false && !p.mine)
+      .sort((a, b) => b.fp - a.fp).slice(0, 12);
+    const rq = need[pos];
+    const wrap = el("div", { style: "margin-bottom:14px" });
+    wrap.appendChild(el("div", { style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px" }, [
+      el("span", { style: "display:flex;align-items:center;gap:7px;font-weight:600;font-size:12.5px" }, [
+        el("span", { class: "pos " + pos, text: pos }), el("span", { text: POSNAME[pos] + "s" })]),
+      el("span", { class: "tiny muted", text: `you need ${rq}` })
+    ]));
+    const W = 430, H = 66, bw = W / list.length;
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+      "aria-label": `Projected points for the top available ${POSNAME[pos]}s` });
+    const mx = Math.max(...list.map(p => p.fp), 1);
+    list.forEach((p, i) => {
+      const h = Math.max(2, (p.fp / mx) * (H - 14));
+      const r = svgEl("rect", { x: i * bw + 1.5, y: H - h - 12, width: bw - 3, height: h, rx: 3,
+        fill: posColor(pos), opacity: i < rq ? 1 : .38, style: "cursor:pointer" });
+      r.addEventListener("mousemove", e => showTip(e,
+        `<b>${p.name}</b><div class="row"><span>${p.clubName || ""}</span></div>
+         <div class="row"><span>Projection</span><span>${n1(p.fp)}</span></div>
+         <div class="row"><span>Cost</span><span>${n1(p.price)} cr</span></div>`));
+      r.addEventListener("mouseleave", hideTip);
+      r.addEventListener("click", () => openDrawer(p.code));
+      svg.appendChild(r);
+      if (i < rq) {
+        const t = svgEl("text", { x: i * bw + bw / 2, y: H - 2, "text-anchor": "middle",
+          fill: cssv("--ink-3"), "font-size": 9, "font-family": "IBM Plex Mono, monospace" });
+        t.textContent = n0(p.fp); svg.appendChild(t);
+      }
+    });
+    wrap.appendChild(svg);
+    card.appendChild(wrap);
+  });
+  return card;
+}
+
+/* ------------------------------------------------------------------ squad view */
+function renderSquad() {
+  const host = $("#view-squad"); host.innerHTML = "";
+  const squad = DATA.squad.map(c => BY[c]).filter(Boolean);
+  const outfield = squad.filter(p => p.pos !== "H").sort((a, b) => b.fp - a.fp);
+  const coach = squad.find(p => p.pos === "H");
+  const k = DATA.rules.fullCredit;
+
+  host.appendChild(el("div", { class: "sechead" }, [
+    el("h2", { text: "Recommended squad" }),
+    el("p", { html:
+      `Chosen by an exact dynamic program over every legal combination of budget, position slots, ` +
+      `the six-full / four-half scoring split and the captain multiplier, then polished against ` +
+      `<b>${DATA.nSims.toLocaleString()}</b> simulated seasons. Expected return ` +
+      `<b>${DATA.squadExpected.toFixed(1)}</b> fantasy points per round for ` +
+      `<b>${DATA.squadCost.toFixed(1)}</b> of ${DATA.rules.budget} credits.` })
+  ]));
+
+  const bcard = el("div", { class: "card pad", style: "margin-bottom:16px" });
+  const spent = DATA.squadCost, budget = DATA.rules.budget;
+  const bud = el("div", { class: "budget" });
+  bud.appendChild(el("b", { class: "mono", style: "font-size:19px", text: spent.toFixed(1) + " cr" }));
+  const bar = el("div", { class: "bar" });
+  bar.appendChild(el("i", { style: `width:${Math.min(100, spent / budget * 100)}%` }));
+  bud.appendChild(bar);
+  bud.appendChild(el("span", { class: "tiny muted", text: (budget - spent).toFixed(1) + " credits unspent" }));
+  bcard.appendChild(bud);
+  const slots = el("div", { class: "slotrow" });
+  ["G", "F", "C"].forEach(pos => {
+    const have = squad.filter(p => p.pos === pos).length;
+    const mineN = ALL.filter(p => p.mine && p.pos === pos).length;
+    slots.appendChild(el("div", { class: "slot" }, [
+      el("span", { class: "pos " + pos, text: pos }),
+      el("b", { text: `${have} / ${DATA.rules.slots[pos]}` }),
+      el("span", { class: "tiny muted", text: mineN ? `${mineN} already yours` : POSNAME[pos] + "s" })
+    ]));
+  });
+  slots.appendChild(el("div", { class: "slot" }, [
+    el("span", { class: "pos H", text: "H" }), el("b", { text: coach ? "1 / 1" : "0 / 1" }),
+    el("span", { class: "tiny muted", text: "Head coach" })
+  ]));
+  bcard.appendChild(slots);
+  host.appendChild(bcard);
+
+  [["Starting six — full points", outfield.slice(0, k)],
+   ["Bench — half points", outfield.slice(k)],
+   ["Head coach", coach ? [coach] : []]].forEach(([label, list]) => {
+    if (!list.length) return;
+    host.appendChild(el("div", { class: "sechead" }, [el("h2", { style: "font-size:15px", text: label })]));
+    const grid = el("div", { class: "lineup" });
+    list.forEach((p, i) => {
+      const captain = label.startsWith("Starting") && i === 0;
+      const card = el("div", { class: "pcard" + (captain ? " captain" : ""), onclick: () => openDrawer(p.code), tabindex: "0" });
+      card.addEventListener("keydown", e => { if (e.key === "Enter") openDrawer(p.code); });
+      card.appendChild(el("span", { class: "role", text: captain ? "Captain ×" + DATA.rules.captainMultiplier : (p.pos === "H" ? "Coach" : (label.startsWith("Bench") ? "×" + DATA.rules.benchMultiplier : "Starter")) }));
+      card.appendChild(el("div", { style: "display:flex;align-items:center;gap:9px" }, [avatar(p, 34), el("h3", { text: p.name })]));
+      card.appendChild(el("div", { class: "meta" }, [
+        el("span", { class: "pos " + p.pos, text: p.pos }),
+        el("span", { text: p.clubName || "" }),
+        p.age ? el("span", { text: "· " + n0(p.age) + "y" }) : el("span")
+      ]));
+      const nums = el("div", { class: "nums" });
+      [[n1(p.fp), "Proj"], [n1(p.price), "Credits"], [(p.ratings || {}).overall || "–", "OVR"],
+       [p.draftValue === null || p.draftValue === undefined ? "–" : n2(p.draftValue), "Draft val"]]
+        .forEach(([v, s]) => nums.appendChild(el("div", {}, [el("b", { text: String(v) }), el("span", { text: s })])));
+      card.appendChild(nums);
+      if (p.replaces) card.appendChild(el("div", { class: "tiny muted", text: "next best here: " + p.replaces }));
+      grid.appendChild(card);
+    });
+    host.appendChild(grid);
+  });
+
+  host.appendChild(el("div", { class: "note", style: "margin-top:18px", html:
+    `<b>Why the bench looks cheap.</b> Bench players score ${DATA.rules.benchMultiplier * 100}% and the captain scores ` +
+    `×${DATA.rules.captainMultiplier}, so credits are worth far more concentrated in the starting six than spread evenly. ` +
+    `The optimiser reaches that conclusion from the scoring rules alone, not from a heuristic. If you would rather carry a ` +
+    `playable bench for injury cover, raise the bench players' prices in your availability sheet or drop them from it.` }));
+}
+
+/* ------------------------------------------------------------------ club depth charts */
+function renderClubs() {
+  const host = $("#view-clubs"); host.innerHTML = "";
+  host.appendChild(el("div", { class: "sechead" }, [
+    el("h2", { text: "Club depth charts" }),
+    el("p", { text: "Every club spends exactly 200 minutes a game. These are the projected shares — " +
+      "the model's read on who actually plays. A summer signing arriving above an incumbent is what " +
+      "pushes that incumbent's projection down, and it is the single biggest driver of fantasy value." })
+  ]));
+  const grid = el("div", { class: "clubgrid" });
+  DATA.clubs.forEach(c => {
+    const squad = DATA.players.filter(p => p.club === c.code).sort((a, b) => (b.mptg || 0) - (a.mptg || 0));
+    const card = el("div", { class: "card pad" });
+    card.appendChild(el("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:10px" }, [
+      el("div", { style: "display:flex;align-items:center;gap:8px" }, [crestImg(c.code, 22), el("h3", { style: "font-size:16px", text: c.name })]),
+      el("span", { class: "tiny muted", text: c.country || "" })
+    ]));
+    const tot = squad.reduce((a, p) => a + (p.fp || 0), 0);
+    card.appendChild(el("div", { class: "tiny muted", text:
+      `${squad.length} players · ${tot.toFixed(0)} projected points per round across the roster` }));
+    const depth = el("div", { class: "depth" });
+    const mx = Math.max(...squad.map(p => p.mptg || 0), 1);
+    squad.slice(0, 13).forEach(p => {
+      const row = el("div", { class: "drow", onclick: () => openDrawer(p.code), tabindex: "0" });
+      row.addEventListener("keydown", e => { if (e.key === "Enter") openDrawer(p.code); });
+      row.appendChild(el("span", { class: "pos " + p.pos, text: p.pos }));
+      const b = el("div", { class: "dbar" });
+      b.appendChild(el("i", { style: `width:${(p.mptg || 0) / mx * 100}%;background:${posColor(p.pos)};color:${posColor(p.pos)};opacity:${p.mptg > 6 ? .34 : .16}` }));
+      b.appendChild(el("em", { class: "dname", text: p.name }));
+      row.appendChild(b);
+      row.appendChild(el("span", { class: "mono tiny", style: "text-align:right", text: n1(p.mptg) }));
+      row.addEventListener("mousemove", e => showTip(e,
+        `<b>${p.name}</b><div class="row"><span>Projected minutes</span><span>${n1(p.mptg)} / game</span></div>
+         <div class="row"><span>His own history says</span><span>${n1(p.mpgPrior)}</span></div>
+         <div class="row"><span>Squeeze from squad</span><span>${p.squeeze === null || p.squeeze === undefined ? "–" : "×" + n2(p.squeeze)}</span></div>
+         <div class="row"><span>Projection</span><span>${n1(p.fp)} pts</span></div>`));
+      row.addEventListener("mouseleave", hideTip);
+      depth.appendChild(row);
+    });
+    card.appendChild(depth);
+    grid.appendChild(card);
+  });
+  host.appendChild(grid);
+}
+
+/* ------------------------------------------------------------------ model view */
+
+function seasonTestCard() {
+  const st = DATA.seasonTest, T = st.totals;
+  const card = el("div", { class: "card pad", style: "margin-bottom:16px" });
+  card.appendChild(el("h3", { class: "subh", text: "Season backtest — playing " + st.season_label + " week by week" }));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:0 0 12px;max-width:75ch",
+    text: "The whole weekly strategy, replayed over " + st.rounds + " rounds: every round the engine updates each " +
+      "player's level from results so far, sets a lineup and captain, and makes up to four transfers — all on " +
+      "information available before the round — then is scored on what actually happened. Nothing here sees the " +
+      "future; the coach slot is dropped because his weekly score is not in the feed." }));
+
+  // headline stat tiles
+  const tiles = el("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px" });
+  const tile = (big, label, sub, tone) => {
+    const t = el("div", { class: "card", style: "padding:11px 13px;box-shadow:none;background:var(--card-2)" });
+    t.appendChild(el("div", { style: `font:700 24px/1 "Saira Condensed",sans-serif;color:${tone||"var(--ink)"}` , text: big }));
+    t.appendChild(el("div", { style: "font-size:11px;font-weight:600;margin-top:3px", text: label }));
+    if (sub) t.appendChild(el("div", { class: "tiny muted", style: "margin-top:2px", text: sub }));
+    return t;
+  };
+  tiles.appendChild(tile(st.pct_of_ceiling + "%", "of the hindsight ceiling", "engine " + T.engine + " vs " + T.hindsight, "var(--accent-ink)"));
+  tiles.appendChild(tile(st.field_beat_pct + "%", "of the field beaten", "vs " + st.n_field + " simulated managers", "var(--good)"));
+  tiles.appendChild(tile((st.gain_vs_hold_pct >= 0 ? "+" : "") + st.gain_vs_hold_pct + "%", "from active transfers", "engine vs set-and-forget"));
+  tiles.appendChild(tile("+" + Math.round(st.gain_vs_no_update), "pts from updating beliefs", "vs a manager who never reacts"));
+  card.appendChild(tiles);
+
+  card.appendChild(raceChart(st));
+  card.appendChild(el("div", { class: "legend", style: "margin-top:10px", html:
+    `<span><i style="background:var(--accent)"></i>Engine</span>
+     <span><i style="background:${cssv("--series-hold")}"></i>Set-and-forget</span>
+     <span><i style="background:${cssv("--series-static")}"></i>Never updates</span>
+     <span><i style="background:${cssv("--series-ceiling")};height:3px;border-radius:1px"></i>Perfect hindsight</span>
+     <span><i style="background:var(--line);opacity:.7"></i>Field range</span>` }));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:10px 0 0",
+    text: "The field is a simulated benchmark — managers who update and transfer with the same method but noisier " +
+      "beliefs — not the real global ranking, which isn't public. The honest read: active, data-driven management " +
+      "clearly beats passive play, the engine is strong but not superhuman (a few lucky managers beat it), and half " +
+      "the ceiling is left on the table by anyone without a crystal ball. Strategy settings were tuned lightly on " +
+      "this season; a second-season check is the next step." }));
+  return card;
+}
+
+function raceChart(st) {
+  const W = 720, H = 300, PL = 44, PR = 96, PT = 12, PB = 26;
+  const series = [
+    ["hindsight", cssv("--series-ceiling"), "Perfect hindsight", 1.5, "4 4"],
+    ["engine", cssv("--accent"), "Engine", 2.5, null],
+    ["hold", cssv("--series-hold"), "Set-and-forget", 2, null],
+    ["no_update", cssv("--series-static"), "Never updates", 2, null],
+  ];
+  const n = st.series.engine.length;
+  const X = i => PL + (i / (n - 1)) * (W - PL - PR);
+  const ymax = Math.max(...st.series.hindsight) * 1.03;
+  const Y = v => H - PB - (v / ymax) * (H - PT - PB);
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Cumulative fantasy points across the season for each strategy" });
+
+  // y gridlines
+  for (let g = 0; g <= 4; g++) {
+    const v = ymax * g / 4;
+    svg.appendChild(svgEl("line", { x1: PL, x2: W - PR, y1: Y(v), y2: Y(v), stroke: cssv("--grid"), "stroke-width": 1 }));
+    const t = svgEl("text", { x: PL - 6, y: Y(v) + 3.5, "text-anchor": "end", fill: cssv("--ink-3"),
+      "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = Math.round(v); svg.appendChild(t);
+  }
+  [1, Math.round(n / 2), n].forEach(r => {
+    const t = svgEl("text", { x: X(r - 1), y: H - PB + 15, "text-anchor": "middle", fill: cssv("--ink-3"),
+      "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = "R" + r; svg.appendChild(t);
+  });
+
+  // field band
+  if (st.field_band) {
+    const lo = st.field_band.lo, hi = st.field_band.hi;
+    let d = "M" + X(0) + " " + Y(hi[0]);
+    for (let i = 1; i < n; i++) d += "L" + X(i) + " " + Y(hi[i]);
+    for (let i = n - 1; i >= 0; i--) d += "L" + X(i) + " " + Y(lo[i]);
+    d += "Z";
+    svg.appendChild(svgEl("path", { d, fill: cssv("--ink-3"), "fill-opacity": 0.12, stroke: "none" }));
+  }
+  // lines
+  series.forEach(([key, color, label, w, dash]) => {
+    const vals = st.series[key];
+    const d = vals.map((v, i) => (i ? "L" : "M") + X(i) + " " + Y(v)).join(" ");
+    const path = svgEl("path", { d, fill: "none", stroke: color, "stroke-width": w, "stroke-linejoin": "round" });
+    if (dash) path.setAttribute("stroke-dasharray", dash);
+    svg.appendChild(path);
+    const last = vals[vals.length - 1];
+    const lab = svgEl("text", { x: W - PR + 6, y: Y(last) + 3.5, fill: color, "font-size": 10.5,
+      "font-weight": 600, "font-family": "IBM Plex Sans, sans-serif" });
+    lab.textContent = label; svg.appendChild(lab);
+  });
+
+  // hover crosshair
+  const line = svgEl("line", { y1: PT, y2: H - PB, stroke: cssv("--ink-3"), "stroke-width": 1, opacity: 0 });
+  svg.appendChild(line);
+  const hit = svgEl("rect", { x: PL, y: PT, width: W - PL - PR, height: H - PT - PB, fill: "transparent", style: "cursor:crosshair" });
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * W;
+    let i = Math.round((px - PL) / (W - PL - PR) * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    line.setAttribute("x1", X(i)); line.setAttribute("x2", X(i)); line.setAttribute("opacity", 1);
+    showTip(ev, `<b>Round ${i + 1}</b>` + series.map(([k, c, l]) =>
+      `<div class="row"><span style="color:${c}">${l}</span><span>${Math.round(st.series[k][i])}</span></div>`).join(""));
+  });
+  hit.addEventListener("mouseleave", () => { line.setAttribute("opacity", 0); hideTip(); });
+  svg.appendChild(hit);
+  return svg;
+}
+
+
+function strategyTestCard() {
+  const st = DATA.strategyTest, C = st.classic, D = st.draft;
+  const card = el("div", { class: "card pad", style: "margin-bottom:16px" });
+  card.appendChild(el("h3", { class: "subh", text: "Strategy backtests — " + st.season_label + ", using last season's real ability" }));
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:0 0 12px;max-width:78ch",
+    text: "A different question from the one above. There the model had to *predict*; here every player is handed his " +
+      "true last-season level, so what's tested is the *decision-making* — lineups, captaincy, transfers, injuries, " +
+      "and drafting. Injuries are detected causally (a player whose club played but who didn't appear is treated as " +
+      "doubtful, then out). This is an upper bound on strategy value, not a real-world ranking." }));
+
+  // classic block
+  card.appendChild(el("div", { class: "subh", text: "Classic — weekly salary-cap, credits drift each round" }));
+  const t1 = el("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px" });
+  const tile = (big, label, sub, tone) => {
+    const t = el("div", { class: "card", style: "padding:11px 13px;box-shadow:none;background:var(--card-2)" });
+    t.appendChild(el("div", { style: `font:700 23px/1 "Saira Condensed",sans-serif;color:${tone || "var(--ink)"}`, text: big }));
+    t.appendChild(el("div", { style: "font-size:11px;font-weight:600;margin-top:3px", text: label }));
+    if (sub) t.appendChild(el("div", { class: "tiny muted", style: "margin-top:2px", text: sub }));
+    return t;
+  };
+  t1.appendChild(tile(C.pct_of_ceiling + "%", "of the hindsight ceiling", "engine " + C.engine + " / " + C.hindsight, "var(--accent-ink)"));
+  t1.appendChild(tile("100 → " + Math.round(C.worth_end), "credits: team value grew", "the price game, played well", "var(--good)"));
+  t1.appendChild(tile("+" + Math.round(C.gain_injury), "pts from injury handling", "vs an injury-blind engine"));
+  t1.appendChild(tile("+" + Math.round(C.gain_transfers), "pts from transfers", "vs set-and-forget"));
+  card.appendChild(t1);
+
+  card.appendChild(classicRace(C));
+  card.appendChild(el("div", { class: "legend", style: "margin-top:8px", html:
+    `<span><i style="background:var(--accent)"></i>Engine</span>
+     <span><i style="background:${cssv("--series-hold")}"></i>Set-and-forget</span>
+     <span><i style="background:${cssv("--series-static")}"></i>Injury-blind</span>
+     <span><i style="background:${cssv("--series-ceiling")};height:3px;border-radius:1px"></i>Perfect hindsight</span>` }));
+
+  // draft block
+  card.appendChild(el("div", { class: "subh", style: "margin-top:18px", text: "Draft — 10-team snake, then hold and manage the roster" }));
+  const t2 = el("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px" });
+  t2.appendChild(tile(D.win_pct + "%", "of drafts won", "the engine's team finishes 1st", "var(--good)"));
+  t2.appendChild(tile(D.avg_rank, "average finish of 10", "top-3 in " + D.top3_pct + "% of drafts", "var(--accent-ink)"));
+  t2.appendChild(tile(Math.round(D.engine_mean), "engine season points", "field averages " + Math.round(D.field_mean)));
+  t2.appendChild(tile("×" + (D.engine_mean / D.field_mean).toFixed(2), "the field's output", "value-drafting + injury waivers"));
+  card.appendChild(t2);
+  card.appendChild(el("p", { class: "tiny muted", style: "margin:10px 0 0",
+    text: "The field are managers who draft on the same abilities with noisier reads. With real player quality known, " +
+      "value-based drafting and disciplined injury management dominate — which is the honest ceiling of what good " +
+      "decisions are worth once the guesswork about who's good is removed. Prices in the classic game are modelled; " +
+      "the coach slot is dropped (no weekly score in the feed)." }));
+  return card;
+}
+
+function classicRace(C) {
+  const W = 720, H = 260, PL = 44, PR = 96, PT = 12, PB = 26;
+  const series = [
+    ["series_hind", cssv("--series-ceiling"), "Perfect hindsight", 1.5, "4 4"],
+    ["series_engine", cssv("--accent"), "Engine", 2.5, null],
+    ["series_hold", cssv("--series-hold"), "Set-and-forget", 2, null],
+    ["series_noinj", cssv("--series-static"), "Injury-blind", 2, null],
+  ];
+  const n = C.series_engine.length, X = i => PL + (i / (n - 1)) * (W - PL - PR);
+  const ymax = Math.max(...C.series_hind) * 1.03, Y = v => H - PB - (v / ymax) * (H - PT - PB);
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Cumulative points across the season for each classic-mode strategy" });
+  for (let g = 0; g <= 4; g++) {
+    const v = ymax * g / 4;
+    svg.appendChild(svgEl("line", { x1: PL, x2: W - PR, y1: Y(v), y2: Y(v), stroke: cssv("--grid"), "stroke-width": 1 }));
+    const t = svgEl("text", { x: PL - 6, y: Y(v) + 3.5, "text-anchor": "end", fill: cssv("--ink-3"), "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = Math.round(v); svg.appendChild(t);
+  }
+  [1, Math.round(n / 2), n].forEach(r => {
+    const t = svgEl("text", { x: X(r - 1), y: H - PB + 15, "text-anchor": "middle", fill: cssv("--ink-3"), "font-size": 9.5, "font-family": "IBM Plex Mono, monospace" });
+    t.textContent = "R" + r; svg.appendChild(t);
+  });
+  series.forEach(([key, color, label, w, dash]) => {
+    const vals = C[key];
+    const d = vals.map((v, i) => (i ? "L" : "M") + X(i) + " " + Y(v)).join(" ");
+    const path = svgEl("path", { d, fill: "none", stroke: color, "stroke-width": w, "stroke-linejoin": "round" });
+    if (dash) path.setAttribute("stroke-dasharray", dash);
+    svg.appendChild(path);
+    const lab = svgEl("text", { x: W - PR + 6, y: Y(vals[vals.length - 1]) + 3.5, fill: color, "font-size": 10.5, "font-weight": 600, "font-family": "IBM Plex Sans, sans-serif" });
+    lab.textContent = label; svg.appendChild(lab);
+  });
+  const line = svgEl("line", { y1: PT, y2: H - PB, stroke: cssv("--ink-3"), "stroke-width": 1, opacity: 0 });
+  svg.appendChild(line);
+  const hit = svgEl("rect", { x: PL, y: PT, width: W - PL - PR, height: H - PT - PB, fill: "transparent", style: "cursor:crosshair" });
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(); let i = Math.round(((ev.clientX - r.left) / r.width * W - PL) / (W - PL - PR) * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    line.setAttribute("x1", X(i)); line.setAttribute("x2", X(i)); line.setAttribute("opacity", 1);
+    showTip(ev, `<b>Round ${i + 1}</b>` + series.map(([k, c, l]) => `<div class="row"><span style="color:${c}">${l}</span><span>${Math.round(C[k][i])}</span></div>`).join(""));
+  });
+  hit.addEventListener("mouseleave", () => { line.setAttribute("opacity", 0); hideTip(); });
+  svg.appendChild(hit);
+  return svg;
+}
+
+function renderModel() {
+  const host = $("#view-model"); host.innerHTML = "";
+  host.appendChild(el("div", { class: "sechead" }, [
+    el("h2", { text: "How it decides" }),
+    el("p", { text: "The projection is graded the only way that means anything: rebuild the world as it " +
+      "looked before a season that has since been played, predict it, and compare." })
+  ]));
+
+  if (DATA.seasonTest) { host.appendChild(seasonTestCard()); }
+  if (DATA.strategyTest) { host.appendChild(strategyTestCard()); }
+
+  if (DATA.validation) {
+    const card = el("div", { class: "card pad" });
+    card.appendChild(el("h3", { class: "subh", text: "Out-of-sample accuracy" }));
+    const t = el("table", { class: "htable vtable", style: "min-width:0" });
+    t.innerHTML = `<thead><tr><th>Season predicted</th><th>Model saw only</th>
+      <th class="num">Rank corr.</th><th class="num">Top-decile hit</th><th class="num">Mean abs. error</th>
+      <th class="num">Inside ±1σ</th></tr></thead>`;
+    const tb = el("tbody");
+    Object.entries(DATA.validation.seasons).forEach(([season, v]) => {
+      const m = v.model, b = v.baselines["last season PIR/game"];
+      const yr = s => s.replace(/^E(\d+)$/, (x, y) => y + "-" + String(+y + 1).slice(2));
+      tb.appendChild(el("tr", { html:
+        `<td><b>${yr(season)}</b> <span class="muted tiny">n=${v.n}</span></td>
+         <td class="muted tiny">${v.history.map(yr).join(", ")}</td>
+         <td class="num"><b>${m.fp_spearman.toFixed(3)}</b></td>
+         <td class="num"><b>${m.top_decile_hit_rate.toFixed(3)}</b></td>
+         <td class="num"><b>${m.fp_mae.toFixed(2)}</b></td>
+         <td class="num"><b>${(m.sigma_coverage_1sd * 100).toFixed(0)}%</b></td>` }));
+      tb.appendChild(el("tr", { style: "color:var(--ink-3)", html:
+        `<td class="tiny">— baseline: repeat last season</td><td></td>
+         <td class="num tiny">${b.spearman.toFixed(3)}</td>
+         <td class="num tiny">${b.top_decile_hit_rate.toFixed(3)}</td>
+         <td class="num tiny">${b.mae.toFixed(2)}</td><td class="num tiny">–</td>` }));
+    });
+    t.appendChild(tb);
+    card.appendChild(el("div", { class: "tablewrap" }, [t]));
+    card.appendChild(el("p", { class: "tiny muted", style: "margin:10px 0 0", text:
+      "The model beats the naive baseline on every measure in both seasons. The ±1σ column is calibration: " +
+      "an honest band would contain about 68% of outcomes, so this one is a little wide — the model is " +
+      "slightly less certain than it needs to be, which is the safe direction to err." }));
+    host.appendChild(card);
+  }
+
+  const steps = [
+    ["Rate", "PIR per 40 minutes, pooled across EuroLeague, EuroCup and the NBA. Each league is converted to a EuroLeague-equivalent rate and weighted by how much its production tells you — a EuroCup minute counts less than a EuroLeague one, and an NBA minute is worth more per possession but translates less reliably."],
+    ["Shrinkage", "Every rate is pulled toward the positional average with a strength of 420 minutes, so a player with 200 minutes of history is not treated as though we know him."],
+    ["Age", "A peak-age curve at 27 moves the projection from the sample's average age to the coming season."],
+    ["Minutes", "The part that matters most. Each club distributes exactly 200 minutes per game across its real 2026-27 roster, following the rotation shape measured from the last two seasons. Sign a starter and somebody's minutes fall."],
+    ["Uncertainty", "Two sources: how erratic a player is game to game, taken from last season's box scores, and how little we know about him — a thin sample, a league change or a new club all widen the band."],
+    ["Optimisation", "An exact dynamic program over budget, position slots, the six-full / four-half split and the captain multiplier. Not a greedy value-per-credit ranking, which systematically overpays for depth."],
+    ["Robustness", "Squads are chosen on the projections and scored on simulated seasons. Optimising and scoring on the same random draw is the optimiser's curse — it floats the noisiest players to the top — so the two are kept apart."]
+  ];
+  const grid = el("div", { class: "grid", style: "grid-template-columns:repeat(auto-fill,minmax(300px,1fr));margin-top:16px" });
+  steps.forEach(([h, b], i) => grid.appendChild(el("div", { class: "card pad" }, [
+    el("div", { class: "subh", text: String(i + 1).padStart(2, "0") + " · " + h }),
+    el("p", { style: "margin:0;font-size:12.5px;color:var(--ink-2)", text: b })
+  ])));
+  host.appendChild(grid);
+
+  host.appendChild(el("div", { class: "note", style: "margin-top:16px", html:
+    `<b>What it cannot see.</b> Players arriving from leagues outside EuroLeague, EuroCup and the NBA — ` +
+    `the Spanish ACB, the Adriatic and Turkish leagues, college basketball — have no record here, so they ` +
+    `fall back to a positional prior with a deliberately wide band. Credit prices are modelled where the ` +
+    `app has not published them; paste the real ones into your availability sheet and they take over. ` +
+    `Coach scoring is an approximation from squad strength.` }));
+}
+
+/* ------------------------------------------------------------------ radar */
+function radarSvg(p) {
+  const S = 250, cx = S / 2, cy = S / 2 - 4, R = 88;
+  const axes = DATA.radar;
+  const svg = svgEl("svg", { viewBox: `0 0 ${S} ${S}`, width: "100%", role: "img",
+    "aria-label": "Attribute radar; every axis is this player's percentile among players at his position" });
+  const pt = (i, r) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / axes.length;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  };
+  [0.25, 0.5, 0.75, 1].forEach(f => {
+    svg.appendChild(svgEl("polygon", {
+      points: axes.map((_, i) => pt(i, R * f).join(",")).join(" "),
+      fill: "none", stroke: cssv("--grid"), "stroke-width": 1
+    }));
+  });
+  axes.forEach((_, i) => {
+    const [x, y] = pt(i, R);
+    svg.appendChild(svgEl("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: cssv("--grid"), "stroke-width": 1 }));
+  });
+  const vals = axes.map(([k]) => Math.max(0, Math.min(99, (p.ratings || {})[k] || 0)) / 99);
+  const poly = svgEl("polygon", {
+    points: vals.map((v, i) => pt(i, R * v).join(",")).join(" "),
+    fill: posColor(p.pos), "fill-opacity": .22, stroke: posColor(p.pos), "stroke-width": 2,
+    "stroke-linejoin": "round"
+  });
+  svg.appendChild(poly);
+  vals.forEach((v, i) => {
+    const [x, y] = pt(i, R * v);
+    svg.appendChild(svgEl("circle", { cx: x, cy: y, r: 3, fill: posColor(p.pos),
+      stroke: cssv("--card"), "stroke-width": 1.5 }));
+  });
+  axes.forEach(([k, label], i) => {
+    const [x, y] = pt(i, R + 21);
+    const t = svgEl("text", { x, y: y + 3, "text-anchor": Math.abs(x - cx) < 6 ? "middle" : (x > cx ? "start" : "end"),
+      fill: cssv("--ink-3"), "font-size": 9.5, "font-family": "IBM Plex Sans, sans-serif", "font-weight": 600 });
+    t.textContent = label;
+    svg.appendChild(t);
+    const v = svgEl("text", { x, y: y + 14, "text-anchor": t.getAttribute("text-anchor"),
+      fill: cssv("--ink-2"), "font-size": 10, "font-family": "IBM Plex Mono, monospace" });
+    v.textContent = (p.ratings || {})[k] ?? "–";
+    svg.appendChild(v);
+  });
+  return svg;
+}
+
+/* ------------------------------------------------------------------ form sparkline */
+function formSvg(p) {
+  const games = (p.series || []).filter(g => g.pir !== null && g.pir !== undefined);
+  if (!games.length) return el("p", { class: "tiny muted", text: "No EuroLeague box scores from last season." });
+  const W = 500, H = 118, PB = 16, PT = 8;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Game-by-game performance index rating last season" });
+  const vals = games.map(g => g.pir);
+  const lo = Math.min(0, ...vals), hi = Math.max(...vals, 1);
+  const Y = v => H - PB - (v - lo) / (hi - lo || 1) * (H - PT - PB);
+  const bw = W / games.length;
+  svg.appendChild(svgEl("line", { x1: 0, x2: W, y1: Y(0), y2: Y(0), stroke: cssv("--line"), "stroke-width": 1 }));
+  const mean = p.prof.mean;
+  if (mean !== null && mean !== undefined) {
+    svg.appendChild(svgEl("line", { x1: 0, x2: W, y1: Y(mean), y2: Y(mean), stroke: cssv("--accent"),
+      "stroke-width": 1.5, "stroke-dasharray": "4 4", opacity: .8 }));
+  }
+  games.forEach((g, i) => {
+    const zero = Y(0), y = Y(g.pir);
+    const top = Math.min(zero, y), h = Math.max(1.5, Math.abs(zero - y));
+    const r = svgEl("rect", { x: i * bw + 1, y: top, width: Math.max(1.5, bw - 2), height: h, rx: 2,
+      fill: g.m === 0 ? cssv("--line") : (g.pir >= 0 ? posColor(p.pos) : cssv("--crit")),
+      opacity: g.s ? 1 : .58, style: "cursor:pointer" });
+    r.addEventListener("mousemove", e => showTip(e,
+      `<b>Round ${g.r ?? "–"}</b><div class="row"><span>PIR</span><span>${n1(g.pir)}</span></div>
+       <div class="row"><span>Minutes</span><span>${n1(g.m)}</span></div>
+       <div class="row"><span>${g.s ? "Started" : (g.m ? "Off the bench" : "Did not play")}</span></div>`));
+    r.addEventListener("mouseleave", hideTip);
+    svg.appendChild(r);
+  });
+  return svg;
+}
+
+/* ------------------------------------------------------------------ drawer */
+const drawer = $("#drawer"), scrim = $("#scrim");
+function closeDrawer() {
+  drawer.classList.remove("open"); scrim.classList.remove("open");
+  drawer.setAttribute("aria-hidden", "true"); state.sel = null; hideTip();
+}
+scrim.addEventListener("click", closeDrawer);
+addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+function openDrawer(code) {
+  const p = BY[code]; if (!p) return;
+  state.sel = code;
+  drawer.innerHTML = "";
+  const head = el("div", { class: "dhead" });
+  head.appendChild(el("button", { class: "closebtn", type: "button", text: "×",
+    "aria-label": "Close", onclick: closeDrawer }));
+  head.appendChild(el("div", { style: "display:flex;align-items:center;gap:12px;padding-right:40px" }, [
+    avatar(p, 52), el("h2", { style: "font-size:25px", text: p.name })]));
+  const meta = el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--ink-3)" });
+  meta.appendChild(el("span", { class: "pos " + p.pos, text: p.pos }));
+  meta.appendChild(el("span", { text: POSNAME[p.pos] }));
+  [p.clubName, p.age ? n1(p.age) + " years" : null, p.height ? p.height + " cm" : null, p.country]
+    .filter(Boolean).forEach(v => meta.appendChild(el("span", { text: "· " + v })));
+  if (p.newTeam) meta.appendChild(el("span", { class: "pill", style: "color:var(--accent-ink);background:var(--accent-wash)", text: "new club" }));
+  if (p.unknown) meta.appendChild(el("span", { class: "pill", style: "color:var(--crit)", text: "no top-flight record" }));
+  head.appendChild(meta);
+  drawer.appendChild(head);
+
+  const body = el("div", { class: "dbody" });
+
+  const kv = el("div", { class: "kv" });
+  [[n1(p.fp), "Proj / round"], ["± " + n1(p.sigma), "1σ band"], [n1(p.price), "Credits"],
+   [(p.ratings || {}).overall ?? "–", "Overall"], [(p.ratings || {}).potential ?? "–", "Potential"],
+   [n1(p.mptg), "Min / game"]]
+    .forEach(([v, s]) => kv.appendChild(el("div", {}, [el("b", { text: String(v) }), el("span", { text: s })])));
+  body.appendChild(kv);
+
+  if (p.draftValue !== null && p.draftValue !== undefined) {
+    body.appendChild(el("div", { class: "note", html:
+      `<b>${p.draftValue > 0 ? "+" : ""}${n2(p.draftValue)} points per round.</b> ` +
+      (p.inSquad
+        ? `He is in the recommended squad; that is what you would lose if somebody took him — ` +
+          `the best replacement at his slot is <b>${p.replaces || "nobody comparable"}</b>.`
+        : `That is what he would add if you took him in place of <b>${p.replaces || "a squad player"}</b>. ` +
+          (p.draftValue < 0 ? "Negative means the squad is better as it stands." : "")) +
+      ` He survives re-optimisation in <b>${pct(p.pickRate)}</b> of simulated seasons.` }));
+  }
+
+  if (p.pos !== "H") {
+    const proj = el("div");
+    proj.appendChild(el("h3", { class: "subh", text: "How the projection is built" }));
+    const rows = [
+      ["Rate", n1(p.rate) + " PIR per 40 min", `pooled from ${(p.leagues || []).join(" + ") || "positional prior"}, ${n0(p.sample)} weighted minutes`],
+      ["Minutes", n1(p.mptg) + " per game", `his own history suggests ${n1(p.mpgPrior)}; the depth chart leaves him ${p.squeeze === null || p.squeeze === undefined ? "–" : "×" + n2(p.squeeze)} of that`],
+      ["Rotation rank", "#" + (p.rank ?? "–") + " at " + (p.clubName || ""), "by projected claim on minutes"],
+      ["Availability", pct(p.avail), "share of team games he is expected to be fit for"],
+      ["Club context", "×" + n2(p.teamCtx), "squad quality adjustment"],
+      ["Range", n1(p.low) + " to " + n1(p.high), "one standard deviation either side"]
+    ];
+    const t = el("table", { class: "htable", style: "min-width:0" });
+    const tb = el("tbody");
+    rows.forEach(([a, b, c]) => tb.appendChild(el("tr", { html:
+      `<td style="color:var(--ink-3);width:90px">${a}</td><td class="mono">${b}</td><td class="tiny muted">${c}</td>` })));
+    t.appendChild(tb);
+    proj.appendChild(t);
+    body.appendChild(proj);
+
+    const rad = el("div");
+    rad.appendChild(el("h3", { class: "subh", text: "Attributes — percentile among " + POSNAME[p.pos].toLowerCase() + "s" }));
+    rad.appendChild(radarSvg(p));
+    body.appendChild(rad);
+
+    const attrs = el("div");
+    attrs.appendChild(el("h3", { class: "subh", text: "Profile" }));
+    const list = el("div", { class: "attr" });
+    DATA.bars.forEach(([k, label]) => {
+      const v = (p.ratings || {})[k];
+      const row = el("div", { class: "attrrow" });
+      row.appendChild(el("span", { class: "muted", text: label }));
+      const bar = el("div", { class: "bar" });
+      bar.appendChild(el("i", { style: `width:${Math.max(0, Math.min(99, v || 0))}%;background:${posColor(p.pos)}` }));
+      row.appendChild(bar);
+      row.appendChild(el("em", { text: v ?? "–" }));
+      list.appendChild(row);
+    });
+    attrs.appendChild(list);
+    body.appendChild(attrs);
+
+    const form = el("div");
+    form.appendChild(el("h3", { class: "subh", text: "Last season, round by round" }));
+    form.appendChild(formSvg(p));
+    if (p.prof && p.prof.gp) {
+      form.appendChild(el("div", { class: "legend", html:
+        `<span>played <b class="mono">${p.prof.gp}</b> of ${p.prof.listed}</span>
+         <span>median <b class="mono">${n1(p.prof.median)}</b></span>
+         <span>floor–ceiling <b class="mono">${n1(p.prof.floor)}–${n1(p.prof.ceil)}</b></span>
+         <span>20+ in <b class="mono">${pct(p.prof.boom)}</b></span>
+         <span>under 5 in <b class="mono">${pct(p.prof.bust)}</b></span>` }));
+    }
+    body.appendChild(form);
+  }
+
+  if ((p.history || []).length) {
+    const hist = el("div");
+    hist.appendChild(el("h3", { class: "subh", text: "Career record the model can see" }));
+    const t = el("table", { class: "htable", style: "min-width:0" });
+    t.innerHTML = `<thead><tr><th>Season</th><th>Comp</th><th>Club</th><th class="num">GP</th>
+      <th class="num">MIN</th><th class="num">PIR</th><th class="num">PTS</th><th class="num">REB</th>
+      <th class="num">AST</th><th class="num">PIR/40</th></tr></thead>`;
+    const tb = el("tbody");
+    p.history.forEach(h => tb.appendChild(el("tr", { html:
+      `<td class="mono">${h.season}</td><td class="tiny muted">${h.comp}</td>
+       <td class="tiny muted">${h.team || "–"}</td><td class="num">${n0(h.gp)}</td>
+       <td class="num">${n1(h.mpg)}</td><td class="num"><b>${n1(h.pir)}</b></td>
+       <td class="num">${n1(h.pts)}</td><td class="num">${n1(h.reb)}</td>
+       <td class="num">${n1(h.ast)}</td><td class="num">${n1(h.p40)}</td>` })));
+    t.appendChild(tb);
+    hist.appendChild(el("div", { class: "tablewrap" }, [t]));
+    body.appendChild(hist);
+  }
+  drawer.appendChild(body);
+  drawer.classList.add("open"); scrim.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  drawer.focus();
+}
+
+/* ------------------------------------------------------------------ boot */
+function setView(v) {
+  state.view = v;
+  ["board", "squad", "clubs", "model"].forEach(k =>
+    $("#view-" + k).classList.toggle("hide", k !== v));
+  document.querySelectorAll(".tab").forEach(t =>
+    t.setAttribute("aria-selected", String(t.dataset.view === v)));
+  if (v === "board") renderBoard();
+  if (v === "squad") renderSquad();
+  if (v === "clubs") renderClubs();
+  if (v === "model") renderModel();
+  scrollTo({ top: 0, behavior: "instant" });
+}
+$("#tabs").addEventListener("click", e => {
+  const t = e.target.closest(".tab"); if (t) setView(t.dataset.view);
+});
+$("#theme").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const dark = cur ? cur === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  setView(state.view);
+  if (state.sel) openDrawer(state.sel);
+});
+// Charts read their colours from the CSS tokens at draw time, so a change of theme
+// has to redraw them - including when the OS flips while the page is open.
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!document.documentElement.getAttribute("data-theme")) {
+    setView(state.view);
+    if (state.sel) openDrawer(state.sel);
+  }
+});
+renderHeader();
+(function(){
+  var h = (location.hash || "").replace(/^#/, "");
+  setView(["board","squad","clubs","model"].indexOf(h) >= 0 ? h : "board");
+})();
+
+</script>
