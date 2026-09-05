@@ -21,13 +21,19 @@ on every simulation, so a single tree averages over many ways the board might fa
 from __future__ import annotations
 
 import math
+from typing import Dict, List
+
 import numpy as np
-from typing import Dict, List, Optional, Tuple
 
 from .config import RULES
-from .draft_sim import (DraftState, DraftUniverse, advance_field, greedy_pick,
-                        heuristic_pick, leaf_value, new_draft, roster_value,
-                        rollout_value, snake_order, vorp_scores)
+from .draft_sim import (
+    DraftState,
+    DraftUniverse,
+    advance_field,
+    leaf_value,
+    roster_value,
+    vorp_scores,
+)
 
 
 class Node:

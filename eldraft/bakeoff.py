@@ -13,9 +13,9 @@ leads to. Everything is causal — models predict a season from strictly earlier
 """
 from __future__ import annotations
 
-import collections
+from typing import Dict, List
+
 import numpy as np
-from typing import Dict, List, Tuple
 
 from . import build
 from .config import WEIGHTS
@@ -115,9 +115,10 @@ def model_ridge(target: str, prev_blocks: dict) -> Dict[str, float]:
 
 def model_draftroom(target: str, ablation: str = None) -> Dict[str, float]:
     """The production projection (optionally ablated), from the backtest universe."""
-    from . import backtest
-    from .project import project_all, Horizon
     import copy
+
+    from . import backtest
+    from .project import project_all
     uni, hz = backtest.universe_for(target, 3)
     players = copy.deepcopy(uni["players"])
     orig_age = None
@@ -212,7 +213,9 @@ def report(targets=("E2025", "E2024")) -> dict:
            "n_players": [p["n_players"] for p in per],
            "ceiling_top10": round(float(np.mean([p["ceiling_top10"] for p in per])), 2),
            "models": avg, "per_season": per}
-    import os, json
+    import json
+    import os
+
     from .config import OUT
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "bakeoff.json"), "w") as fh:

@@ -29,7 +29,7 @@ it into a robust decision: we report how often each player survives as the right
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -164,7 +164,7 @@ class SquadDP:
 
     def solve(self) -> Tuple[float, List[int]]:
         """Optimal squad value and the indices (into `players`) that achieve it."""
-        fwd = [None] * (len(self.order) + 1)
+        fwd: List[Any] = [None] * (len(self.order) + 1)
         cur = self._empty()
         cur[(0,) * len(self.slots.shape) + (0,)] = 0.0
         fwd[0] = cur
@@ -219,7 +219,7 @@ class SquadDP:
         is what makes the Monte-Carlo layer affordable.
         """
         n = len(self.order)
-        fwd = [None] * (n + 1)
+        fwd: List[Any] = [None] * (n + 1)
         cur = self._empty()
         cur[(0,) * len(self.slots.shape) + (0,)] = 0.0
         fwd[0] = cur
@@ -227,7 +227,7 @@ class SquadDP:
             cur = self._step_forward(cur, self.players[i], i)
             fwd[k + 1] = cur
 
-        bwd = [None] * (n + 1)
+        bwd: List[Any] = [None] * (n + 1)
         nxt = self._terminal()
         bwd[n] = nxt
         for k in range(n - 1, -1, -1):

@@ -8,8 +8,7 @@ import os
 from typing import Dict, List, Optional
 
 from . import fetch
-from .config import (DATA, EC_HISTORY, EL_HISTORY, GAMELOG_SEASONS, NBA_HISTORY,
-                     TARGET_SEASON, norm_position)
+from .config import DATA, EC_HISTORY, EL_HISTORY, GAMELOG_SEASONS, NBA_HISTORY, TARGET_SEASON, norm_position
 from .names import NameIndex, display_name, split_el_name
 
 UNIVERSE_PATH = os.path.join(DATA, "universe.json")

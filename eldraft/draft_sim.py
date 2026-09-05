@@ -14,9 +14,10 @@ nothing is re-estimated here.
 """
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
+
+import numpy as np
 
 from .config import RULES
 from .optimize import _credits_to_units
@@ -31,8 +32,9 @@ POS_IX = {p: i for i, p in enumerate(POS)}
 class DraftUniverse:
     """Column arrays for the pool, plus the per-position price ladders feasibility needs."""
 
-    def __init__(self, pool: Sequence[dict], rules=RULES):
+    def __init__(self, pool: Sequence[dict], rules=RULES, coach: bool = True):
         self.rules = rules
+        self.coach = coach
         self.n = len(pool)
         self.pool = list(pool)
         self.code = [p.get("code") for p in pool]
@@ -47,7 +49,7 @@ class DraftUniverse:
 
         # Slot template every team must fill, in POS order.
         self.need_template = np.array(
-            [rules.slots["G"], rules.slots["F"], rules.slots["C"], 1], dtype=np.int8
+            [rules.slots["G"], rules.slots["F"], rules.slots["C"], 1 if coach else 0], dtype=np.int8
         )
         self.squad_slots = int(self.need_template.sum())
 
@@ -382,7 +384,7 @@ def vorp_scores(state: DraftState, seat: int, budget: float = None) -> Dict[int,
     quantity the one-shot recommender ranks by, evaluated at a mid-draft state, so a
     greedy agent built on it *is* the current tool playing the draft pick by pick.
     """
-    from .optimize import SquadDP, Slots
+    from .optimize import Slots, SquadDP
     uni = state.uni
     budget = RULES.budget if budget is None else budget
     t = state.teams[seat]
@@ -399,7 +401,7 @@ def vorp_scores(state: DraftState, seat: int, budget: float = None) -> Dict[int,
     for i in avail_idx:
         sub.append(uni.pool[int(i)]); gindex.append(int(i))
 
-    dp = SquadDP(sub, budget, Slots(), score_key="fp")
+    dp = SquadDP(sub, budget, Slots(coach=uni.coach), score_key="fp")
     mv = dp.marginal_values()
     out = {}
     for local_i, (w, wo) in mv.items():
@@ -426,7 +428,7 @@ def dp_complete_value(uni: DraftUniverse, my_picks: List[int], avail: np.ndarray
     so the dynamic program runs over that shortlist plus my committed picks — near-exact
     and several times faster than the full board.
     """
-    from .optimize import SquadDP, Slots
+    from .optimize import Slots, SquadDP
     budget = RULES.budget if budget is None else budget
     sub, forced = [], set()
     for i in my_picks:
@@ -438,7 +440,7 @@ def dp_complete_value(uni: DraftUniverse, my_picks: List[int], avail: np.ndarray
             top = idxs[np.argsort(-uni.fp[idxs])[:shortlist]]
             for i in top:
                 sub.append(uni.pool[int(i)])
-    val, _ = SquadDP(sub, budget, Slots()).solve()
+    val, _ = SquadDP(sub, budget, Slots(coach=uni.coach)).solve()
     return val
 
 
@@ -468,3 +470,57 @@ def leaf_value(state: DraftState, my_seat: int, rng: np.random.Generator,
         # depletion left me unable to complete legally; fall back to a heuristic finish
         return rollout_value(state.clone(), my_seat, rng, temp)
     return val
+
+
+def remaining_snake(needs_per_team: List[np.ndarray], my_seat: int, n_teams: int) -> List[int]:
+    """A snake order over the picks each team still owes, starting with `my_seat`."""
+    order: List[int] = []
+    rem = [int(n.sum()) for n in needs_per_team]
+    seq = [my_seat] + [s for s in range(n_teams) if s != my_seat]
+    rnd = 0
+    while any(r > 0 for r in rem) and rnd < 400:
+        ring = seq if rnd % 2 == 0 else list(reversed(seq))
+        for s in ring:
+            if rem[s] > 0:
+                order.append(s)
+                rem[s] -= 1
+        rnd += 1
+    return order
+
+
+def state_at_my_turn(uni: DraftUniverse, n_teams: int, my_seat: int,
+                     mine_idx: Sequence[int], taken_idx: Sequence[int],
+                     budget: float = None) -> DraftState:
+    """Reconstruct a mid-draft state where it is `my_seat`'s turn: my picks are mine,
+    rivals' picks are distributed across the other seats, and the remaining order snakes
+    from me — matching how the in-browser MCTS models a live board."""
+    budget = RULES.budget if budget is None else budget
+    bu = _credits_to_units(budget)
+    teams = [Team(s, [], 0, uni.need_template.copy()) for s in range(n_teams)]
+    avail = np.ones(uni.n, dtype=bool)
+    for i in mine_idx:
+        teams[my_seat].picks.append(int(i))
+        teams[my_seat].spent_units += int(uni.units[i])
+        teams[my_seat].needs[uni.pos[i]] -= 1
+        avail[i] = False
+    opp = [s for s in range(n_teams) if s != my_seat]
+    k = 0
+    for i in taken_idx:
+        if not avail[i]:
+            continue
+        pos = uni.pos[i]
+        placed = False
+        for t in range(len(opp)):
+            s = opp[(k + t) % len(opp)]
+            if teams[s].needs[pos] > 0:
+                teams[s].picks.append(int(i))
+                teams[s].spent_units += int(uni.units[i])
+                teams[s].needs[pos] -= 1
+                avail[i] = False
+                k = (k + t + 1) % len(opp)
+                placed = True
+                break
+        if not placed:
+            avail[i] = False        # nobody needs that position — just off the board
+    order = remaining_snake([t.needs for t in teams], my_seat, n_teams)
+    return DraftState(uni, n_teams, bu, order, 0, teams, avail)

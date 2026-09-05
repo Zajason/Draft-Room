@@ -11,8 +11,8 @@ import os
 from typing import Dict, List, Optional
 
 from .config import OUT, RULES, TARGET_SEASON
-from .optimize import Slots, robust_draft
 from .images import build_images
+from .optimize import Slots, robust_draft
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard_template.html")
 
@@ -180,7 +180,6 @@ def build_payload(board: dict, sims: int = 400) -> dict:
             "name": c.get("abbreviatedName") or c.get("name"),
             "fullName": c.get("name"),
             "country": (c.get("country") or {}).get("name"),
-            "crest": ((c.get("images") or {}).get("crest")),
             "strength": round(sum(p.get("fp") or 0 for p in players if p.get("club") == code), 1),
             "size": len(squad), "crest": imgs["crests"].get(code),
         })

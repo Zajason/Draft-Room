@@ -17,8 +17,8 @@ import ssl
 import urllib.request
 from typing import Dict, Optional
 
-from .config import DATA, EC_HISTORY, EL_HISTORY
 from . import fetch
+from .config import DATA, EC_HISTORY, EL_HISTORY
 
 CACHE_DIR = os.path.join(DATA, "img_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)

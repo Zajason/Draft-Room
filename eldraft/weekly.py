@@ -100,7 +100,7 @@ def build_weekly() -> Dict:
     # Games per team per round, so the UI can flag byes and double-gameweeks at a glance.
     counts = {}
     for rnd in rounds:
-        c = collections.Counter()
+        c: "collections.Counter[str]" = collections.Counter()
         for g in sched[rnd]:
             c[g["home"]] += 1
             c[g["away"]] += 1

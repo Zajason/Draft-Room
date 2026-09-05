@@ -6,7 +6,7 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 from . import build, pricing, ratings
-from .config import DATA, OUT, RULES, TARGET_SEASON, norm_position
+from .config import DATA, RULES, norm_position
 from .excel_io import link_to_universe, read_availability
 from .project import project_all
 

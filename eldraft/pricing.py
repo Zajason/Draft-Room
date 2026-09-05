@@ -11,7 +11,7 @@ which is exactly the tension that makes the budget bind.
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from .config import RULES
 

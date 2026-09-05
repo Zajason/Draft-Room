@@ -200,8 +200,9 @@ def cmd_backtest(args) -> int:
 
 def cmd_template(args) -> int:
     """Write a spreadsheet pre-filled with every player, ready to edit."""
-    from .pipeline import load_board
     from openpyxl import Workbook
+
+    from .pipeline import load_board
     board = load_board()
     wb = Workbook()
     ws = wb.active

@@ -1,0 +1,40 @@
+{
+ "config": {
+  "n_drafts": 20,
+  "n_teams": 8,
+  "base_sims": 150,
+  "score_sims": 600
+ },
+ "mcts_mean": 115.452,
+ "greedy_mean": 114.468,
+ "field_mean": 103.883,
+ "mean_diff": 0.984,
+ "diff_stderr": 0.861,
+ "t_stat": 1.14,
+ "mcts_beats_greedy_rate": 0.65,
+ "mcts_point_mean": 111.217,
+ "greedy_point_mean": 110.466,
+ "seconds": 524.5,
+ "per_draft_diff": [
+  1.52,
+  1.51,
+  6.01,
+  -2.21,
+  -6.11,
+  3.62,
+  2.4,
+  -1.16,
+  -4.28,
+  -7.86,
+  -1.24,
+  5.77,
+  3.01,
+  3.62,
+  4.12,
+  0.36,
+  4.51,
+  -0.5,
+  2.52,
+  4.07
+ ]
+}

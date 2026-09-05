@@ -1,7 +1,14 @@
 .venv/
-data/
-out/
+data/*
+!data/board.json
+out/*
+!out/*.json
 __pycache__/
 *.pyc
 .DS_Store
 .claude/
+*.egg-info/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

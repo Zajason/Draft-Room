@@ -1,10 +1,15 @@
 """Brute-force check that the DP returns the true optimum of the structured objective."""
-import itertools, random, sys
-import numpy as np
+import itertools
 import os
+import random
+import sys
+
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from eldraft.optimize import SquadDP, Slots
 from eldraft.config import GameRules
+from eldraft.optimize import Slots, SquadDP
+
 
 def brute(players, budget, caps, rules):
     best, bestset = float("-inf"), None
@@ -71,6 +76,7 @@ for trial in range(12):
     else:
         print("ok trial %d  dp=%.3f == brute=%.3f  squad valid, marginals consistent"%(trial,v,bv))
 print("brute-force failures:", fails)
+assert fails == 0, "exact DP disagreed with brute force"
 
 # --------------------------------------------------------------------------------------
 # Mandatory (already-drafted) players must always appear in the solution.
@@ -101,7 +107,7 @@ def test_mandatory():
             fv,_=SquadDP(free,30.0,slots,rules).solve()
             if v > fv+1e-3: bad+=1; print("FAIL forced > free", v, fv)
     print("mandatory failures:", bad)
-    return bad
+    assert bad == 0
 
 # --------------------------------------------------------------------------------------
 # forced / excluded candidate evaluation
@@ -133,10 +139,15 @@ def test_forced_excluded():
         w,wo = mv[j]
         if abs(w-vf)>1e-2 or abs(wo-ve)>1e-2: bad+=1; print("FAIL marginals disagree",w,vf,wo,ve)
     print("forced/excluded failures:", bad)
-    return bad
+    assert bad == 0
+
+
+def test_brute_force():
+    assert fails == 0
 
 
 if __name__ == "__main__":
-    n = test_mandatory() + test_forced_excluded()
-    print("ALL EXTRA TESTS PASS" if n==0 else "EXTRA TESTS FAILED")
-    sys.exit(1 if (fails or n) else 0)
+    test_mandatory()
+    test_forced_excluded()
+    print("ALL EXTRA TESTS PASS")
+    sys.exit(1 if fails else 0)

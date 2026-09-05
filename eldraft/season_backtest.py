@@ -15,12 +15,11 @@ season it scores.
 from __future__ import annotations
 
 import collections
-import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
-from . import build, fetch
+from . import fetch
 from .config import RULES
 
 
@@ -203,8 +202,9 @@ class Season:
         self.H, self.gamma, self.lam, self.max_t = horizon, gamma, lam, max_t
 
         uni, hz = backtest.universe_for(target, history)
-        from .project import project_all
         import copy
+
+        from .project import project_all
         players = copy.deepcopy(uni["players"])
         project_all(players, hz)
 
@@ -225,11 +225,6 @@ class Season:
         # per-round PIR conceded by each club (for the causal defence estimate)
         self.against = collections.defaultdict(dict)
         allv = []
-        for rnd, games in self.fixtures.items():
-            # team total PIR that round = sum of its players' actual PIR
-            tp = collections.defaultdict(float)
-            tof = team_of_round(target)
-            # cheaper: derive from actuals + team_of_round once (built lazily below)
         self._team_round = team_of_round(target)
         team_pir = collections.defaultdict(lambda: collections.defaultdict(float))
         for code, rmap in self.actual.items():
@@ -357,7 +352,6 @@ def run_strategy(season: Season, kind="engine", seed=0, noise=0.0):
             pl = season.pool(rnd, upto, set(squad), sf)
             cur = set(squad)
             fr, sq = transfer_solve(pl, RULES.budget, cur, season.max_t, season.caps, RULES)
-            base = fr[0]
             best, bt = -1e18, 0
             for lvl in range(season.max_t + 1):
                 if fr[lvl] is None:
@@ -390,14 +384,15 @@ def run_strategy(season: Season, kind="engine", seed=0, noise=0.0):
 # ======================================================================================
 def run_report(target="E2025", n_field=40, seed=0) -> dict:
     """Play the season with every strategy and assemble the comparison."""
-    import os, json
+    import json
+    import os
+
     from .config import OUT
     s = Season(target)
     eng = run_strategy(s, "engine")
     hold = run_strategy(s, "hold")
     hind = run_strategy(s, "hindsight")
     static = run_strategy(Season(target, k_prior=1e6), "engine")
-    rng = np.random.default_rng(seed)
     field = []
     for i in range(n_field):
         sig = 0.12 + 0.5 * (i / max(1, n_field - 1))

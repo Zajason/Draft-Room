@@ -18,8 +18,9 @@ only what was knowable before the round, exactly as in real life.
 from __future__ import annotations
 
 import collections
+from typing import Dict, List
+
 import numpy as np
-from typing import Dict, List, Optional
 
 from .config import RULES
 from .season_backtest import Season, transfer_solve
@@ -311,7 +312,9 @@ def report_draft(season, n_teams=10, n_drafts=20):
 # Combined report
 # ======================================================================================
 def run_report(target="E2025", n_field=24, n_drafts=24) -> dict:
-    import os, json
+    import json
+    import os
+
     from .config import OUT
     s = augment(Season(target))
     y = int(target[1:])

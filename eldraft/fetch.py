@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-import requests
+import requests  # type: ignore[import-untyped]
 
 from .config import APIV2, APIV3, ESPN, FEEDS, RAW, USER_AGENT
 
@@ -68,7 +68,7 @@ def _get_json(url: str, tag: str, retries: int = 8, timeout: int = 40) -> Option
         except (ValueError, OSError):
             pass  # corrupt cache entry -> refetch
 
-    last = None
+    last: Any = None
     for attempt in range(retries):
         try:
             with _THROTTLE:

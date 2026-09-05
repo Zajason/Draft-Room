@@ -16,14 +16,14 @@ import json
 import os
 import sys
 import time
-import numpy as np
 from typing import Dict, List
 
-from .config import OUT, RULES
-from .draft_sim import DraftUniverse, new_draft, roster_value
+import numpy as np
+
+from .config import OUT
+from .draft_sim import DraftUniverse, greedy_pick, heuristic_pick, new_draft, roster_value
 from .mcts import MCTS
 from .optimize import _eval_squads, _sample_scores
-from .draft_sim import greedy_pick, heuristic_pick
 
 
 # ======================================================================================
@@ -94,7 +94,7 @@ def run_draft(uni, n_teams, seat_agents, rng) -> List[List[int]]:
 # ======================================================================================
 def evaluate(n_drafts=24, n_teams=8, base_sims=200, score_sims=600,
              seed=0, verbose=True) -> Dict:
-    from .pipeline import load_board, apply_availability, draft_pool
+    from .pipeline import apply_availability, draft_pool, load_board
     board = load_board()
     apply_availability(board, None)
     pool, _, _ = draft_pool(board)

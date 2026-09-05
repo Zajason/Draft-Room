@@ -61,6 +61,13 @@ def _stat(p: dict, key: str, nba_key: Optional[str] = None) -> Optional[float]:
     return v
 
 
+def _defense(p: dict) -> Optional[float]:
+    stl = _stat(p, "stl", "stl")
+    if stl is None:
+        return None
+    return stl + 1.4 * (_stat(p, "blk", "blk") or 0.0)
+
+
 ATTRIBUTES: Dict[str, Dict] = {
     "scoring":      {"pos": True,  "f": lambda p: _stat(p, "pts", "pts")},
     "three_point":  {"pos": True,  "f": lambda p: _stat(p, "fg3m", None)},
@@ -68,10 +75,10 @@ ATTRIBUTES: Dict[str, Dict] = {
     "free_throws":  {"pos": True,  "f": lambda p: (_best_block(p).get("ftm", 0) / _best_block(p)["fta"] if _best_block(p).get("fta") else None)},
     "playmaking":   {"pos": True,  "f": lambda p: _stat(p, "ast", "ast")},
     "rebounding":   {"pos": True,  "f": lambda p: _stat(p, "reb", "reb")},
-    "defense":      {"pos": True,  "f": lambda p: (None if _stat(p, "stl", "stl") is None else (_stat(p, "stl", "stl") + 1.4 * (_stat(p, "blk", "blk") or 0.0)))},
+    "defense":      {"pos": True,  "f": lambda p: _defense(p)},
     "efficiency":   {"pos": True,  "f": lambda p: (_best_block(p).get("ts") or None)},
     "usage":        {"pos": True,  "f": lambda p: (None if _best_block(p).get("min", 0) <= 0 else (_best_block(p).get("fg2a", 0) + _best_block(p).get("fg3a", 0) + 0.44 * _best_block(p).get("fta", 0) + _best_block(p).get("to", 0)) / _best_block(p)["min"] * 36.0)},
-    "ball_security": {"pos": True, "f": lambda p: (-(_stat(p, "to", "to")) if _stat(p, "to", "to") is not None else None)},
+    "ball_security": {"pos": True, "f": lambda p: (None if _stat(p, "to", "to") is None else -float(_stat(p, "to", "to") or 0.0))},
     "motor":        {"pos": True,  "f": lambda p: _stat(p, "fd", None)},
     "role":         {"pos": False, "f": lambda p: p.get("mpg_proj")},
     "durability":   {"pos": False, "f": lambda p: p.get("availability")},
@@ -88,7 +95,7 @@ def _percentile_map(values: List[Optional[float]]) -> List[Optional[float]]:
     out: List[Optional[float]] = [None] * len(values)
     if not idx:
         return out
-    order = sorted(idx, key=lambda i: values[i])
+    order = sorted(idx, key=lambda i: values[i] or 0.0)  # idx excludes None
     n = len(order)
     i = 0
     while i < n:

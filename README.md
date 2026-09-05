@@ -219,6 +219,36 @@ Use your own availability sheet (headers are matched fuzzily; unmatched names ar
 ./.venv/bin/python -m eldraft.cli draft --available out/availability_template.xlsx
 ```
 
+# API & Docker
+
+The engines are also exposed as a stateless HTTP service (FastAPI), so the projections,
+the exact optimiser and the draft engine can be called from anything.
+
+```bash
+pip install -e ".[api]"
+eldraft build                 # one-time: fetch data + model
+uvicorn eldraft.api:app --reload
+# → http://localhost:8000/docs  (interactive OpenAPI)
+```
+
+Or fully containerised — the image bakes a fresh board at build time and serves immediately:
+
+```bash
+docker build -t draftroom-api .
+docker run -p 8000:8000 draftroom-api
+curl -s localhost:8000/optimize -H 'content-type: application/json'      -d '{"budget":100}' | jq '.expected_points, .squad[0].name'
+```
+
+| Endpoint | What it does |
+|---|---|
+| `GET /players`, `/players/{code}`, `/clubs` | projections, one player's full card, club depth |
+| `POST /optimize` | the exact salary-cap squad + ranked draft board |
+| `POST /draft/pick` | next-pick recommendation — `engine: greedy` (exact) or `mcts` (lookahead) |
+| `POST /weekly/transfers` | best ≤N transfers for a round, matchup-adjusted, with the value frontier |
+| `GET /research/{bakeoff,validation,strategy}` | the backtest / bake-off results as JSON |
+
+Everything is validated: **`ruff`** (lint) and **`mypy`** (types on the core engine) run in CI alongside **`pytest`**, which includes the brute-force checks that the exact and transfer dynamic programs match an exhaustive search.
+
 # What it can't see
 
 - Players from leagues outside EuroLeague / EuroCup / the NBA (Spanish ACB, Adriatic, Turkish, college) have no record here and fall back to a positional prior with a wide band — the UI flags them.
@@ -252,6 +282,9 @@ eldraft/
   live.py         builds the Squad Room (weekly + draft), in-browser engines
   web/            the JS engines (exact DP + MCTS) + app, verified against Python
   cli.py          command line
+  api.py          FastAPI service (projections / optimise / draft / weekly)
+Dockerfile        containerised API (bakes a board at build time)
+pyproject.toml    packaging + entry point + ruff / mypy / pytest config
 tests/            brute-force checks for the exact DP and the transfer DP
 .github/          CI: runs the brute-force correctness tests on every push
 docs/             self-contained demo builds + screenshots (GitHub Pages ready)

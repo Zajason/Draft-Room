@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Optional
 
-from .config import OUT, RULES, TARGET_SEASON
 from . import weekly as _weekly
+from .config import OUT, RULES, TARGET_SEASON
 from .images import build_images
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")

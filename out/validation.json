@@ -1,0 +1,101 @@
+{
+ "generated": "2026-09-02T22:18:10",
+ "seasons": {
+  "E2025": {
+   "n": 273,
+   "history": [
+    "E2024",
+    "E2023",
+    "E2022"
+   ],
+   "model": {
+    "n": 273,
+    "fp_pearson": 0.5427,
+    "fp_spearman": 0.5218,
+    "fp_mae": 3.191,
+    "fp_bias": -0.765,
+    "mpg_pearson": 0.4541,
+    "mpg_mae": 6.014,
+    "mpg_bias": -1.343,
+    "sigma_coverage_1sd": 0.7839,
+    "top_decile_hit_rate": 0.4074,
+    "minutes_curve_rmse": 0.607
+   },
+   "baselines": {
+    "last season PIR/game": {
+     "pearson": 0.5116,
+     "spearman": 0.4401,
+     "mae": 3.985,
+     "top_decile_hit_rate": 0.3704
+    },
+    "last season rate x minutes": {
+     "pearson": 0.5116,
+     "spearman": 0.4402,
+     "mae": 3.985,
+     "top_decile_hit_rate": 0.3704
+    },
+    "model": {
+     "pearson": 0.5427,
+     "spearman": 0.5218,
+     "mae": 3.191,
+     "top_decile_hit_rate": 0.4074
+    }
+   }
+  },
+  "E2024": {
+   "n": 245,
+   "history": [
+    "E2023",
+    "E2022",
+    "E2021"
+   ],
+   "model": {
+    "n": 245,
+    "fp_pearson": 0.5691,
+    "fp_spearman": 0.5655,
+    "fp_mae": 3.166,
+    "fp_bias": -0.764,
+    "mpg_pearson": 0.4984,
+    "mpg_mae": 5.839,
+    "mpg_bias": -1.375,
+    "sigma_coverage_1sd": 0.7796,
+    "top_decile_hit_rate": 0.375,
+    "minutes_curve_rmse": 0.573
+   },
+   "baselines": {
+    "last season PIR/game": {
+     "pearson": 0.4689,
+     "spearman": 0.466,
+     "mae": 3.85,
+     "top_decile_hit_rate": 0.3333
+    },
+    "last season rate x minutes": {
+     "pearson": 0.4689,
+     "spearman": 0.466,
+     "mae": 3.85,
+     "top_decile_hit_rate": 0.3333
+    },
+    "model": {
+     "pearson": 0.5691,
+     "spearman": 0.5655,
+     "mae": 3.166,
+     "top_decile_hit_rate": 0.375
+    }
+   }
+  }
+ },
+ "draft_engines": {
+  "mcts_mean": 115.452,
+  "greedy_mean": 114.468,
+  "field_mean": 103.883,
+  "mean_diff": 0.984,
+  "diff_stderr": 0.861,
+  "mcts_beats_greedy_rate": 0.65,
+  "config": {
+   "n_drafts": 20,
+   "n_teams": 8,
+   "base_sims": 150,
+   "score_sims": 600
+  }
+ }
+}
