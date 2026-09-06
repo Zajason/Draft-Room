@@ -16,14 +16,17 @@
 const NEG = -1e9;
 const POSL = ["G", "F", "C", "H"];
 const CAPS = [4, 4, 2, 1];
+// The game's real quotations move in tenths of a credit, so the knapsack grid must too;
+// a coarser grid rounds prices and can slip an over-budget squad past the cap.
+const CSTEP = 0.1;
 
-function unitsOf(price) { return Math.round(price / 0.5); }
+function unitsOf(price) { return Math.round(price / CSTEP); }
 
 /* ---- exact squad dynamic program --------------------------------------------- */
 function DP(players, budget, rules, caps) {
   rules = rules || { full: 6, bench: 0.5, captain: 2.0 };
   caps = caps || CAPS;
-  const B = Math.round(budget / 0.5);
+  const B = Math.round(budget / CSTEP);
   const dims = [caps[0] + 1, caps[1] + 1, caps[2] + 1, caps[3] + 1, B + 1];
   const stride = [dims[1] * dims[2] * dims[3] * dims[4], dims[2] * dims[3] * dims[4], dims[3] * dims[4], dims[4], 1];
   const size = dims[0] * stride[0];
@@ -236,16 +239,16 @@ function squadVal(uni,picks,rules){const out=[];let coach=0;
   out.sort((a,b)=>b-a);const k=rules.full;let v=0;for(let j=0;j<out.length;j++)v+=(j<k?1:rules.bench)*out[j];
   if(out.length)v+=(rules.captain-1)*out[0];return v+coach;}
 function dpCompleteValue(uni,myPicks,avail,budget,rules,shortlist,caps){
-  const sub=[];for(const i of myPicks)sub.push({pos:POSL[uni.pos[i]],price:uni.units[i]/2,fp:uni.fp[i],mandatory:true});
+  const sub=[];for(const i of myPicks)sub.push({pos:POSL[uni.pos[i]],price:uni.units[i]*CSTEP,fp:uni.fp[i],mandatory:true});
   for(let pi=0;pi<4;pi++){const idxs=[];for(let i=0;i<uni.n;i++)if(avail[i]&&uni.pos[i]===pi)idxs.push(i);
-    idxs.sort((a,b)=>uni.fp[b]-uni.fp[a]);for(let j=0;j<Math.min(shortlist,idxs.length);j++){const i=idxs[j];sub.push({pos:POSL[pi],price:uni.units[i]/2,fp:uni.fp[i]});}}
+    idxs.sort((a,b)=>uni.fp[b]-uni.fp[a]);for(let j=0;j<Math.min(shortlist,idxs.length);j++){const i=idxs[j];sub.push({pos:POSL[pi],price:uni.units[i]*CSTEP,fp:uni.fp[i]});}}
   return DP(sub,budget,rules,caps).solveValue();
 }
 function leafValue(uni,state,rng,rules,shortlist,caps){
   const s=cloneState(state);
   while(s.ptr<s.order.length){const seat=s.order[s.ptr];if(seat===s.mySeat){s.ptr++;continue;}
     const i=heurPick(uni,s,seat,rng,0.6);if(i<0){s.ptr++;continue;}applyPick(uni,s,seat,i);}
-  const v=dpCompleteValue(uni,state.myPicks,s.avail,state.budgetU/2,rules,shortlist,caps);
+  const v=dpCompleteValue(uni,state.myPicks,s.avail,state.budgetU*CSTEP,rules,shortlist,caps);
   return isFinite(v)&&v>-1e8?v:squadVal(uni,state.myPicks,rules);
 }
 function softmaxPrior(scores,temp){const ks=Object.keys(scores);if(!ks.length)return{};
@@ -277,7 +280,7 @@ function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,ca
   takenSet.forEach(c=>{const i=codeIx[c];if(avail[i]===0)return;avail[i]=0;const pi=uni.pos[i];
     let placed=false;for(let t=0;t<opp.length;t++){const s=opp[(seat+t)%opp.length];if(needs[s][pi]>0){needs[s][pi]--;spent[s]+=uni.units[i];seat=(seat+t+1)%opp.length;placed=true;break;}}});
   const order=remainingOrder(needs,mySeat,nTeams);
-  const budgetU=Math.round(rules.budget/0.5);
+  const budgetU=Math.round(rules.budget/CSTEP);
   const root={children:{},N:0,W:0,P:{},cand:[],expanded:false};
   const rootState={needs,spent,avail,order,ptr:0,mySeat,budgetU,myPicks};
   // must be my turn at ptr 0 (remainingOrder starts with me)
@@ -344,7 +347,7 @@ function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,ca
    ================================================================================ */
 function transferDP(players, budget, currentSet, maxT, caps, rules){
   rules=rules||{full:6,bench:0.5,captain:2.0}; caps=caps||CAPS;
-  const B=Math.round(budget/0.5), T=maxT;
+  const B=Math.round(budget/CSTEP), T=maxT;
   const dims=[caps[0]+1,caps[1]+1,caps[2]+1,caps[3]+1,B+1,T+1];
   const st=[dims[1]*dims[2]*dims[3]*dims[4]*dims[5],dims[2]*dims[3]*dims[4]*dims[5],dims[3]*dims[4]*dims[5],dims[4]*dims[5],dims[5],1];
   const size=dims[0]*st[0];

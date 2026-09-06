@@ -7,6 +7,29 @@ const n2=v=>v==null?"–":(+v).toFixed(2);
 const POSNAME={G:"Guard",F:"Forward",C:"Centre",H:"Coach"};
 const RULES=DATA.rules, WK=DATA.weekly, SCOUT_URL="__SCOUT_URL__";
 const ALL=DATA.players, BY={}; ALL.forEach(p=>BY[p.code]=p);
+// Credit prices are the game's official quotations (imported from the stats export); a
+// user can still override any value locally (kept in
+// localStorage). Overrides are written straight into the player objects so every engine —
+// budget, transfers, draft — uses the corrected price automatically.
+const ORIG_PRICE={}; ALL.forEach(p=>ORIG_PRICE[p.code]=p.price);
+const LSKEY_PRICES="elsr_prices_v1";
+let PRICES={};
+function loadPrices(){ try{const r=localStorage.getItem(LSKEY_PRICES); if(r)PRICES=JSON.parse(r)||{};}catch(e){} for(const c in PRICES){ if(BY[c]) BY[c].price=PRICES[c]; } }
+function savePrices(){ try{localStorage.setItem(LSKEY_PRICES, JSON.stringify(PRICES));}catch(e){} }
+function setPrice(code,v){ v=Math.round(v*2)/2; if(v===ORIG_PRICE[code]){delete PRICES[code];} else {PRICES[code]=v;} BY[code].price=(PRICES[code]!=null?PRICES[code]:ORIG_PRICE[code]); savePrices(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function resetPrices(){ for(const c in PRICES){ if(BY[c]) BY[c].price=ORIG_PRICE[c]; } PRICES={}; savePrices(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function priceCell(p){
+  const td=el("td",{class:"num"});
+  const edited=PRICES[p.code]!=null;
+  const title=edited?("Overridden (official "+n1(ORIG_PRICE[p.code])+") — click to change"):(p.priceSource==="official"?"Official credit value — click to override":"Estimated — click to set the real value");
+  const span=el("span",{class:"cred"+(edited?" edited":""),title:title,text:n1(p.price)});
+  span.addEventListener("click",e=>{e.stopPropagation();const inp=el("input",{class:"credinp",type:"number",step:"0.5",min:"1",max:"30",value:p.price});
+    td.innerHTML="";td.appendChild(inp);inp.focus();inp.select();
+    const done=commit=>{if(commit){const v=parseFloat(inp.value);if(!isNaN(v)&&v>0){setPrice(p.code,v);return;}}renderBoard();};
+    inp.addEventListener("blur",()=>done(true));
+    inp.addEventListener("keydown",ev=>{if(ev.key==="Enter"){done(true);}else if(ev.key==="Escape"){done(false);}});});
+  td.appendChild(span);return td;
+}
 const CAPS_WEEKLY=[RULES.slots.G,RULES.slots.F,RULES.slots.C,1];
 const CAPS_DRAFT=[RULES.slots.G,RULES.slots.F,RULES.slots.C,0];
 const CLUBNAME=DATA.clubNames||{}, clubName=c=>CLUBNAME[c]||c, CREST=DATA.crests||{};
@@ -335,7 +358,7 @@ function renderBoard(){
       p.unknown?el("span",{class:"tiny",style:"color:var(--warn)",title:"No top-flight record",text:"⚠"}):el("span")])]));
     row.appendChild(el("td",{},[el("span",{class:"pos "+p.pos,text:p.pos,title:POSNAME[p.pos]})]));
     row.appendChild(el("td",{class:"muted"},[el("div",{class:"clubcell"},[badge(p.clubCode,16),el("span",{text:p.club||""})])]));
-    row.appendChild(el("td",{class:"num",text:n1(p.price)}));
+    row.appendChild(priceCell(p));
     if(S.mode==="weekly"){ const w=weeklyFP(p,S.wkRound);
       row.appendChild(el("td",{class:"num",style:w.games.length?"":"color:var(--crit)"},[el("b",{text:n1(w.fp)})]));
       row.appendChild(el("td",{class:"tiny muted",text:matchupText(w)}));
@@ -375,14 +398,20 @@ function setMode(m){ S.mode=m; sortK=m==="weekly"?"_wkfp":"fp"; sortDir=-1;
   if(m==="draft"&&S.pos==="H"){S.pos="ALL";[...$("#posf").children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v==="ALL")));}
   refresh();
 }
-function refresh(){ renderHeader(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
+function refreshPriceHint(){ var h=$("#pricehint"); if(!h)return; var n=Object.keys(PRICES).length;
+  h.innerHTML = n ? ('<b>'+n+'</b> override'+(n>1?'s':'')+' · <a href="#" id="resetprices">reset</a>')
+                  : 'CR values are the game\'s official quotations — click any Cr to override';
+  var r=$("#resetprices"); if(r) r.addEventListener("click",function(e){e.preventDefault();resetPrices();}); }
+function refresh(){ renderHeader(); refreshPriceHint(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
 function boot(){
-  loadTeams();
+  loadTeams(); loadPrices();
   if(SCOUT_URL&&SCOUT_URL.indexOf("http")===0)$("#scoutlink").href=SCOUT_URL; else $("#scoutlink").classList.add("hide");
   $("#modetabs").addEventListener("click",e=>{const t=e.target.closest(".modetab");if(t)setMode(t.dataset.mode);});
   const pf=$("#posf"); [["ALL","All"],["G","G"],["F","F"],["C","C"],["H","Coach"]].forEach(([v,l])=>
     pf.appendChild(el("button",{class:"chip","aria-pressed":String(S.pos===v),text:l,"data-v":v,onclick:()=>{S.pos=v;[...pf.children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v===v)));renderBoard();}})));
   $("#q").addEventListener("input",e=>{S.q=e.target.value;renderBoard();});
+  var ctrls=document.querySelector(".controls");
+  if(ctrls){ var hint=el("span",{class:"pricehint",id:"pricehint"}); ctrls.appendChild(hint); refreshPriceHint(); }
   $("#theme").addEventListener("click",()=>{const cur=document.documentElement.getAttribute("data-theme");const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",dark?"light":"dark");refresh();});
   var params = new URLSearchParams(location.search);
   var demo = params.get("demo") || (location.hash||"").replace(/^#/, "");

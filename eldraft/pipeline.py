@@ -53,6 +53,12 @@ def load_board() -> dict:
         return json.load(fh)
 
 
+def save_board(board: dict) -> str:
+    with open(BOARD_PATH, "w") as fh:
+        json.dump(board, fh)
+    return BOARD_PATH
+
+
 # ======================================================================================
 # Applying an availability sheet
 # ======================================================================================

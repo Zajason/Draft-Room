@@ -150,6 +150,12 @@ tbody tr.rec td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .mside.in{border-left:3px solid var(--good)}
 .move .arrow{text-align:center;color:var(--ink-3);font-weight:700}
 .mini[disabled]{pointer-events:none}
+.cred{cursor:pointer;border-bottom:1px dashed var(--line)}
+.cred:hover{color:var(--ink);border-bottom-color:var(--accent)}
+.cred.edited{color:var(--accent-ink);font-weight:600;border-bottom-color:var(--accent)}
+.credinp{width:56px;font:500 12px/1 "IBM Plex Mono",monospace;background:var(--card);border:1px solid var(--accent);border-radius:5px;padding:3px 5px;color:var(--ink);text-align:right}
+.pricehint{font-size:11px;color:var(--ink-3);margin-left:auto;align-self:center}
+.pricehint a{color:var(--accent-ink);cursor:pointer}
 .muted{color:var(--ink-3)}.tiny{font-size:11px}.hide{display:none!important}
 </style>
 <header class="top">
@@ -200,14 +206,17 @@ const DATA = /*__DATA__*/null;
 const NEG = -1e9;
 const POSL = ["G", "F", "C", "H"];
 const CAPS = [4, 4, 2, 1];
+// The game's real quotations move in tenths of a credit, so the knapsack grid must too;
+// a coarser grid rounds prices and can slip an over-budget squad past the cap.
+const CSTEP = 0.1;
 
-function unitsOf(price) { return Math.round(price / 0.5); }
+function unitsOf(price) { return Math.round(price / CSTEP); }
 
 /* ---- exact squad dynamic program --------------------------------------------- */
 function DP(players, budget, rules, caps) {
   rules = rules || { full: 6, bench: 0.5, captain: 2.0 };
   caps = caps || CAPS;
-  const B = Math.round(budget / 0.5);
+  const B = Math.round(budget / CSTEP);
   const dims = [caps[0] + 1, caps[1] + 1, caps[2] + 1, caps[3] + 1, B + 1];
   const stride = [dims[1] * dims[2] * dims[3] * dims[4], dims[2] * dims[3] * dims[4], dims[3] * dims[4], dims[4], 1];
   const size = dims[0] * stride[0];
@@ -420,16 +429,16 @@ function squadVal(uni,picks,rules){const out=[];let coach=0;
   out.sort((a,b)=>b-a);const k=rules.full;let v=0;for(let j=0;j<out.length;j++)v+=(j<k?1:rules.bench)*out[j];
   if(out.length)v+=(rules.captain-1)*out[0];return v+coach;}
 function dpCompleteValue(uni,myPicks,avail,budget,rules,shortlist,caps){
-  const sub=[];for(const i of myPicks)sub.push({pos:POSL[uni.pos[i]],price:uni.units[i]/2,fp:uni.fp[i],mandatory:true});
+  const sub=[];for(const i of myPicks)sub.push({pos:POSL[uni.pos[i]],price:uni.units[i]*CSTEP,fp:uni.fp[i],mandatory:true});
   for(let pi=0;pi<4;pi++){const idxs=[];for(let i=0;i<uni.n;i++)if(avail[i]&&uni.pos[i]===pi)idxs.push(i);
-    idxs.sort((a,b)=>uni.fp[b]-uni.fp[a]);for(let j=0;j<Math.min(shortlist,idxs.length);j++){const i=idxs[j];sub.push({pos:POSL[pi],price:uni.units[i]/2,fp:uni.fp[i]});}}
+    idxs.sort((a,b)=>uni.fp[b]-uni.fp[a]);for(let j=0;j<Math.min(shortlist,idxs.length);j++){const i=idxs[j];sub.push({pos:POSL[pi],price:uni.units[i]*CSTEP,fp:uni.fp[i]});}}
   return DP(sub,budget,rules,caps).solveValue();
 }
 function leafValue(uni,state,rng,rules,shortlist,caps){
   const s=cloneState(state);
   while(s.ptr<s.order.length){const seat=s.order[s.ptr];if(seat===s.mySeat){s.ptr++;continue;}
     const i=heurPick(uni,s,seat,rng,0.6);if(i<0){s.ptr++;continue;}applyPick(uni,s,seat,i);}
-  const v=dpCompleteValue(uni,state.myPicks,s.avail,state.budgetU/2,rules,shortlist,caps);
+  const v=dpCompleteValue(uni,state.myPicks,s.avail,state.budgetU*CSTEP,rules,shortlist,caps);
   return isFinite(v)&&v>-1e8?v:squadVal(uni,state.myPicks,rules);
 }
 function softmaxPrior(scores,temp){const ks=Object.keys(scores);if(!ks.length)return{};
@@ -461,7 +470,7 @@ function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,ca
   takenSet.forEach(c=>{const i=codeIx[c];if(avail[i]===0)return;avail[i]=0;const pi=uni.pos[i];
     let placed=false;for(let t=0;t<opp.length;t++){const s=opp[(seat+t)%opp.length];if(needs[s][pi]>0){needs[s][pi]--;spent[s]+=uni.units[i];seat=(seat+t+1)%opp.length;placed=true;break;}}});
   const order=remainingOrder(needs,mySeat,nTeams);
-  const budgetU=Math.round(rules.budget/0.5);
+  const budgetU=Math.round(rules.budget/CSTEP);
   const root={children:{},N:0,W:0,P:{},cand:[],expanded:false};
   const rootState={needs,spent,avail,order,ptr:0,mySeat,budgetU,myPicks};
   // must be my turn at ptr 0 (remainingOrder starts with me)
@@ -528,7 +537,7 @@ function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,ca
    ================================================================================ */
 function transferDP(players, budget, currentSet, maxT, caps, rules){
   rules=rules||{full:6,bench:0.5,captain:2.0}; caps=caps||CAPS;
-  const B=Math.round(budget/0.5), T=maxT;
+  const B=Math.round(budget/CSTEP), T=maxT;
   const dims=[caps[0]+1,caps[1]+1,caps[2]+1,caps[3]+1,B+1,T+1];
   const st=[dims[1]*dims[2]*dims[3]*dims[4]*dims[5],dims[2]*dims[3]*dims[4]*dims[5],dims[3]*dims[4]*dims[5],dims[4]*dims[5],dims[5],1];
   const size=dims[0]*st[0];
@@ -601,6 +610,29 @@ const n2=v=>v==null?"–":(+v).toFixed(2);
 const POSNAME={G:"Guard",F:"Forward",C:"Centre",H:"Coach"};
 const RULES=DATA.rules, WK=DATA.weekly, SCOUT_URL="__SCOUT_URL__";
 const ALL=DATA.players, BY={}; ALL.forEach(p=>BY[p.code]=p);
+// Credit prices are the game's official quotations (imported from the stats export); a
+// user can still override any value locally (kept in
+// localStorage). Overrides are written straight into the player objects so every engine —
+// budget, transfers, draft — uses the corrected price automatically.
+const ORIG_PRICE={}; ALL.forEach(p=>ORIG_PRICE[p.code]=p.price);
+const LSKEY_PRICES="elsr_prices_v1";
+let PRICES={};
+function loadPrices(){ try{const r=localStorage.getItem(LSKEY_PRICES); if(r)PRICES=JSON.parse(r)||{};}catch(e){} for(const c in PRICES){ if(BY[c]) BY[c].price=PRICES[c]; } }
+function savePrices(){ try{localStorage.setItem(LSKEY_PRICES, JSON.stringify(PRICES));}catch(e){} }
+function setPrice(code,v){ v=Math.round(v*2)/2; if(v===ORIG_PRICE[code]){delete PRICES[code];} else {PRICES[code]=v;} BY[code].price=(PRICES[code]!=null?PRICES[code]:ORIG_PRICE[code]); savePrices(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function resetPrices(){ for(const c in PRICES){ if(BY[c]) BY[c].price=ORIG_PRICE[c]; } PRICES={}; savePrices(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function priceCell(p){
+  const td=el("td",{class:"num"});
+  const edited=PRICES[p.code]!=null;
+  const title=edited?("Overridden (official "+n1(ORIG_PRICE[p.code])+") — click to change"):(p.priceSource==="official"?"Official credit value — click to override":"Estimated — click to set the real value");
+  const span=el("span",{class:"cred"+(edited?" edited":""),title:title,text:n1(p.price)});
+  span.addEventListener("click",e=>{e.stopPropagation();const inp=el("input",{class:"credinp",type:"number",step:"0.5",min:"1",max:"30",value:p.price});
+    td.innerHTML="";td.appendChild(inp);inp.focus();inp.select();
+    const done=commit=>{if(commit){const v=parseFloat(inp.value);if(!isNaN(v)&&v>0){setPrice(p.code,v);return;}}renderBoard();};
+    inp.addEventListener("blur",()=>done(true));
+    inp.addEventListener("keydown",ev=>{if(ev.key==="Enter"){done(true);}else if(ev.key==="Escape"){done(false);}});});
+  td.appendChild(span);return td;
+}
 const CAPS_WEEKLY=[RULES.slots.G,RULES.slots.F,RULES.slots.C,1];
 const CAPS_DRAFT=[RULES.slots.G,RULES.slots.F,RULES.slots.C,0];
 const CLUBNAME=DATA.clubNames||{}, clubName=c=>CLUBNAME[c]||c, CREST=DATA.crests||{};
@@ -929,7 +961,7 @@ function renderBoard(){
       p.unknown?el("span",{class:"tiny",style:"color:var(--warn)",title:"No top-flight record",text:"⚠"}):el("span")])]));
     row.appendChild(el("td",{},[el("span",{class:"pos "+p.pos,text:p.pos,title:POSNAME[p.pos]})]));
     row.appendChild(el("td",{class:"muted"},[el("div",{class:"clubcell"},[badge(p.clubCode,16),el("span",{text:p.club||""})])]));
-    row.appendChild(el("td",{class:"num",text:n1(p.price)}));
+    row.appendChild(priceCell(p));
     if(S.mode==="weekly"){ const w=weeklyFP(p,S.wkRound);
       row.appendChild(el("td",{class:"num",style:w.games.length?"":"color:var(--crit)"},[el("b",{text:n1(w.fp)})]));
       row.appendChild(el("td",{class:"tiny muted",text:matchupText(w)}));
@@ -969,14 +1001,20 @@ function setMode(m){ S.mode=m; sortK=m==="weekly"?"_wkfp":"fp"; sortDir=-1;
   if(m==="draft"&&S.pos==="H"){S.pos="ALL";[...$("#posf").children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v==="ALL")));}
   refresh();
 }
-function refresh(){ renderHeader(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
+function refreshPriceHint(){ var h=$("#pricehint"); if(!h)return; var n=Object.keys(PRICES).length;
+  h.innerHTML = n ? ('<b>'+n+'</b> override'+(n>1?'s':'')+' · <a href="#" id="resetprices">reset</a>')
+                  : 'CR values are the game\'s official quotations — click any Cr to override';
+  var r=$("#resetprices"); if(r) r.addEventListener("click",function(e){e.preventDefault();resetPrices();}); }
+function refresh(){ renderHeader(); refreshPriceHint(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
 function boot(){
-  loadTeams();
+  loadTeams(); loadPrices();
   if(SCOUT_URL&&SCOUT_URL.indexOf("http")===0)$("#scoutlink").href=SCOUT_URL; else $("#scoutlink").classList.add("hide");
   $("#modetabs").addEventListener("click",e=>{const t=e.target.closest(".modetab");if(t)setMode(t.dataset.mode);});
   const pf=$("#posf"); [["ALL","All"],["G","G"],["F","F"],["C","C"],["H","Coach"]].forEach(([v,l])=>
     pf.appendChild(el("button",{class:"chip","aria-pressed":String(S.pos===v),text:l,"data-v":v,onclick:()=>{S.pos=v;[...pf.children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v===v)));renderBoard();}})));
   $("#q").addEventListener("input",e=>{S.q=e.target.value;renderBoard();});
+  var ctrls=document.querySelector(".controls");
+  if(ctrls){ var hint=el("span",{class:"pricehint",id:"pricehint"}); ctrls.appendChild(hint); refreshPriceHint(); }
   $("#theme").addEventListener("click",()=>{const cur=document.documentElement.getAttribute("data-theme");const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",dark?"light":"dark");refresh();});
   var params = new URLSearchParams(location.search);
   var demo = params.get("demo") || (location.hash||"").replace(/^#/, "");

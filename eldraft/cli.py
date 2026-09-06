@@ -136,6 +136,29 @@ def cmd_live(args) -> int:
     return 0
 
 
+def cmd_prices(args) -> int:
+    from . import prices as P
+    from .pipeline import load_board, save_board
+    board = load_board()
+    report = P.import_prices(board, args.sheet)
+    save_board(board)
+    print("official prices from {}".format(args.sheet))
+    print("  priced {} players and {} coaches ({} rows in the export)".format(
+        report["priced"], report["coaches_priced"], report["rows"]))
+    left = report.get("unpriced_players", [])
+    if left:
+        print("  {} board players not in the export (kept modelled price): {}{}".format(
+            len(left), ", ".join(left[:10]), " ..." if len(left) > 10 else ""))
+    if report["ambiguous"]:
+        print("  ambiguous names skipped: " + ", ".join(report["ambiguous"][:10]))
+    print("-> data/board.json")
+    if not args.no_rebuild:
+        from .live import build_live
+        path = build_live(board, out_path=args.out)
+        print("-> {} (Squad Room now uses the real credit values)".format(path))
+    return 0
+
+
 def cmd_bakeoff(args) -> int:
     from .bakeoff import report
     r = report(tuple(args.seasons))
@@ -256,6 +279,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     lv.add_argument("--roster", help="players you already own")
     lv.add_argument("--out", default=os.path.join(OUT, "live_draft.html"))
     lv.set_defaults(fn=cmd_live)
+
+    pr = sub.add_parser("prices", help="bake the game's official credit values into the board")
+    pr.add_argument("--sheet", required=True, help="the game's player-stats .xlsx export (has a Quotation column)")
+    pr.add_argument("--out", default=os.path.join(OUT, "live_draft.html"))
+    pr.add_argument("--no-rebuild", action="store_true", help="update board.json only, don't rewrite the live page")
+    pr.set_defaults(fn=cmd_prices)
 
     dv = sub.add_parser("draft-eval", help="measure MCTS vs the greedy engine in simulated drafts")
     dv.add_argument("--drafts", type=int, default=20)

@@ -36,7 +36,7 @@ import numpy as np
 from .config import RULES
 
 NEG = -1e9
-CREDIT_STEP = 0.5          # official prices move in half credits
+CREDIT_STEP = 0.1          # the game's real quotations move in tenths of a credit
 
 
 class Slots:
