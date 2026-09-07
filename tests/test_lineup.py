@@ -30,7 +30,7 @@ def _brute_best(scores, pos):
         if (cnt["G"], cnt["F"], cnt["C"]) not in FORMATIONS:
             continue
         for sixth in idx:
-            if sixth in five:
+            if sixth in five or pos[sixth] != "G":   # the sixth man is always a guard
                 continue
             full = set(five) | {sixth}
             fs = sum(scores[i] for i in full)

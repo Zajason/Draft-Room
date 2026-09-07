@@ -22,32 +22,29 @@ const CSTEP = 0.1;
 
 function unitsOf(price) { return Math.round(price / CSTEP); }
 
-// Starting-five formations (G,F,C); the sixth man is any position on top of these.
+// Starting-five formations (G,F,C). The sixth man is ALWAYS a guard, so the full-credit
+// six is a formation five plus one extra guard — these are its only legal (G,F,C) shapes.
 const FORMATIONS = [[2,1,2],[2,2,1],[1,3,1],[3,1,1],[1,2,2]];
+const FULL6 = FORMATIONS.map(([g,f,c]) => [g+1, f, c]);
 
-// Formation-legal best six by `key` (e.g. weekly projection), preferring the available.
+// Best full-six by `key` (e.g. weekly projection), preferring the available.
 // Returns a Set of indices into the parallel arrays. Mirrors choose_full_fast in Python.
 function chooseFullSix(key, pos, avail) {
-  const n = key.length, FULL = 6;
+  const n = key.length;
   const adj = key.map((k, i) => k - ((avail && !avail[i]) ? 1e6 : 0));
   const byPos = { G: [], F: [], C: [] };
   for (let i = 0; i < n; i++) (byPos[pos[i]] || byPos.F).push(i);
   for (const k in byPos) byPos[k].sort((a, b) => adj[b] - adj[a]);
   let best = null, bestVal = null;
-  for (const [gf, ff, cf] of FORMATIONS) {
-    if (byPos.G.length < gf || byPos.F.length < ff || byPos.C.length < cf) continue;
-    const five = byPos.G.slice(0, gf).concat(byPos.F.slice(0, ff), byPos.C.slice(0, cf));
-    const chosen = new Set(five);
-    const leftover = [];
-    for (let i = 0; i < n; i++) if (!chosen.has(i)) leftover.push(i);
-    leftover.sort((a, b) => adj[b] - adj[a]);
-    for (const i of leftover.slice(0, Math.max(0, FULL - five.length))) chosen.add(i);
-    let v = 0; chosen.forEach(i => { v += adj[i]; });
-    if (bestVal === null || v > bestVal) { bestVal = v; best = chosen; }
+  for (const [g6, f6, c6] of FULL6) {
+    if (byPos.G.length < g6 || byPos.F.length < f6 || byPos.C.length < c6) continue;
+    const full = byPos.G.slice(0, g6).concat(byPos.F.slice(0, f6), byPos.C.slice(0, c6));
+    let v = 0; for (const i of full) v += adj[i];
+    if (bestVal === null || v > bestVal) { bestVal = v; best = new Set(full); }
   }
   if (!best) {
     const order = key.map((_, i) => i).sort((a, b) => adj[b] - adj[a]);
-    best = new Set(order.slice(0, FULL));
+    best = new Set(order.slice(0, 6));
   }
   return best;
 }

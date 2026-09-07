@@ -1,7 +1,7 @@
 """Weekly lineup scoring under the real Classic rules, with reactive substitutions.
 
 The game does NOT freeze your full/bench split on pre-week projections.  Each round you
-field a starting five in a G-F-C formation, plus a flex "sixth man" (any position) - six
+field a starting five in a G-F-C formation, plus a "sixth man" who is always a guard - six
 players at full credit, the captain doubled - and four bench players at half.  Games are
 spread Tuesday to Friday and you may re-set players who have not tipped off yet, so the
 score you end up with reflects an informed, *reactive* choice of who counts full.
@@ -23,11 +23,15 @@ import numpy as np
 
 from .config import RULES
 
-# Valid starting-five formations as (guards, forwards, centers); the sixth man is any
-# position on top of these, so the full-six always covers every position at least once.
+# Valid starting-five formations as (guards, forwards, centers).
 FORMATIONS: Tuple[Tuple[int, int, int], ...] = (
     (2, 1, 2), (2, 2, 1), (1, 3, 1), (3, 1, 1), (1, 2, 2),
 )
+
+# The sixth man is ALWAYS a guard, so the full-credit six is a formation five plus one
+# extra guard.  These are therefore the only legal (G, F, C) counts for the full six.
+FULL6: Tuple[Tuple[int, int, int], ...] = tuple((g + 1, f, c) for g, f, c in FORMATIONS)
+_FULL6SET = frozenset(FULL6)
 
 _FULL = RULES.full_credit_slots            # 6 players score full
 _BENCHMULT = RULES.bench_multiplier        # the other 4 score half
@@ -46,10 +50,9 @@ def _by_pos(scores: Sequence[float], pos: Sequence[str]) -> Dict[str, List[float
 def best_lineup(scores: Sequence[float], pos: Sequence[str]) -> float:
     """Highest weekly total for these realised scores under formation + 6th-man + captain.
 
-    Full-credit six = a valid formation five plus one flex; the captain (the best of the
-    six) is doubled; everyone else scores half.  Exact: we try every formation, fill each
-    position with its best available scorers, take the best leftover as the sixth man, and
-    keep the maximum.
+    Full-credit six = a formation five plus one extra guard; the captain (the best of the
+    six) is doubled; everyone else scores half.  Exact: we try every legal six-man shape,
+    fill each position with its best available scorers, and keep the maximum.
     """
     n = len(scores)
     if n == 0:
@@ -57,19 +60,11 @@ def best_lineup(scores: Sequence[float], pos: Sequence[str]) -> float:
     bp = _by_pos(scores, pos)
     total_all = sum(scores)
     best = None
-    for gf, ff, cf in FORMATIONS:
-        if len(bp["G"]) < gf or len(bp["F"]) < ff or len(bp["C"]) < cf:
+    for g6, f6, c6 in FULL6:
+        if len(bp["G"]) < g6 or len(bp["F"]) < f6 or len(bp["C"]) < c6:
             continue
-        # The five formation starters: the top scorers at each position.
-        five = bp["G"][:gf] + bp["F"][:ff] + bp["C"][:cf]
-        used = {"G": gf, "F": ff, "C": cf}
-        # Sixth man: the best scorer not already a starter, any position.
-        leftover = [v for k in ("G", "F", "C") for v in bp[k][used[k]:]]
-        if not leftover and n < _FULL:
-            full = five
-        else:
-            leftover.sort(reverse=True)
-            full = five + leftover[:max(0, _FULL - 5)]
+        # Full six = top scorers filling this formation-plus-a-guard shape.
+        full = bp["G"][:g6] + bp["F"][:f6] + bp["C"][:c6]
         full_sum = sum(full)
         # Bench (everyone not in the full six) scores half; captain doubles the best full.
         bench_sum = total_all - full_sum
@@ -77,7 +72,7 @@ def best_lineup(scores: Sequence[float], pos: Sequence[str]) -> float:
         val = full_sum + _BENCHMULT * bench_sum + _CAPX * cap
         if best is None or val > best:
             best = val
-    if best is None:                        # squad can't field a legal five (degenerate)
+    if best is None:                        # squad can't field a legal six (degenerate)
         s = sorted(scores, reverse=True)
         full = s[:_FULL]
         best = sum(full) + _BENCHMULT * sum(s[_FULL:]) + (_CAPX * full[0] if full else 0.0)
@@ -109,10 +104,8 @@ def _choose_full(values: Sequence[float], pos: Sequence[str],
         cnt = {"G": 0, "F": 0, "C": 0}
         for i in full:
             cnt[pos[i]] = cnt.get(pos[i], 0) + 1
-        # Full-six is a valid formation five plus one flex: some formation fits within it.
-        ok = any(cnt["G"] >= gf and cnt["F"] >= ff and cnt["C"] >= cf
-                 for gf, ff, cf in FORMATIONS)
-        if not ok:
+        # Full-six must be a formation five plus the extra guard - an exact legal shape.
+        if (cnt["G"], cnt["F"], cnt["C"]) not in _FULL6SET:
             continue
         v = sum(values[i] for i in full)
         if best is None or v > best:
@@ -139,15 +132,10 @@ def choose_full_fast(key: Sequence[float], pos: Sequence[str],
     for k in by_pos:
         by_pos[k].sort(key=lambda i: -adj[i])
     best_val, best_set = None, None
-    for gf, ff, cf in FORMATIONS:
-        if len(by_pos["G"]) < gf or len(by_pos["F"]) < ff or len(by_pos["C"]) < cf:
+    for g6, f6, c6 in FULL6:
+        if len(by_pos["G"]) < g6 or len(by_pos["F"]) < f6 or len(by_pos["C"]) < c6:
             continue
-        five = by_pos["G"][:gf] + by_pos["F"][:ff] + by_pos["C"][:cf]
-        chosen = set(five)
-        leftover = [i for i in range(n) if i not in chosen]
-        leftover.sort(key=lambda i: -adj[i])
-        need = _FULL - len(five)
-        full = set(five) | set(leftover[:max(0, need)])
+        full = by_pos["G"][:g6] + by_pos["F"][:f6] + by_pos["C"][:c6]
         val = sum(adj[i] for i in full)
         if best_val is None or val > best_val:
             best_val, best_set = val, frozenset(full)
@@ -224,8 +212,9 @@ class WeeklyObjective:
     so a bench player earns full credit exactly in the weeks a starter is out.  That is
     what the old linear "top-six by mean" objective never priced, and why it bought
     four-credit bench filler.  Common random numbers (fixed draws) make swap comparisons
-    low-noise.  Formation feasibility is not re-checked here: any legal G4/F4/C2 squad can
-    always field one of the five formations, so it never binds on the six best available.
+    low-noise.  For speed the vectorised score takes the six best available by mean and
+    does not enforce the exact guard-heavy six-man shape - a mild approximation, which is
+    why this is an analysis tool rather than the shipped optimiser.
     """
 
     def __init__(self, pool: Sequence[dict], sims: int = 512, seed: int = 0):
