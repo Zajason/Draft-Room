@@ -22,6 +22,36 @@ const CSTEP = 0.1;
 
 function unitsOf(price) { return Math.round(price / CSTEP); }
 
+// Starting-five formations (G,F,C); the sixth man is any position on top of these.
+const FORMATIONS = [[2,1,2],[2,2,1],[1,3,1],[3,1,1],[1,2,2]];
+
+// Formation-legal best six by `key` (e.g. weekly projection), preferring the available.
+// Returns a Set of indices into the parallel arrays. Mirrors choose_full_fast in Python.
+function chooseFullSix(key, pos, avail) {
+  const n = key.length, FULL = 6;
+  const adj = key.map((k, i) => k - ((avail && !avail[i]) ? 1e6 : 0));
+  const byPos = { G: [], F: [], C: [] };
+  for (let i = 0; i < n; i++) (byPos[pos[i]] || byPos.F).push(i);
+  for (const k in byPos) byPos[k].sort((a, b) => adj[b] - adj[a]);
+  let best = null, bestVal = null;
+  for (const [gf, ff, cf] of FORMATIONS) {
+    if (byPos.G.length < gf || byPos.F.length < ff || byPos.C.length < cf) continue;
+    const five = byPos.G.slice(0, gf).concat(byPos.F.slice(0, ff), byPos.C.slice(0, cf));
+    const chosen = new Set(five);
+    const leftover = [];
+    for (let i = 0; i < n; i++) if (!chosen.has(i)) leftover.push(i);
+    leftover.sort((a, b) => adj[b] - adj[a]);
+    for (const i of leftover.slice(0, Math.max(0, FULL - five.length))) chosen.add(i);
+    let v = 0; chosen.forEach(i => { v += adj[i]; });
+    if (bestVal === null || v > bestVal) { bestVal = v; best = chosen; }
+  }
+  if (!best) {
+    const order = key.map((_, i) => i).sort((a, b) => adj[b] - adj[a]);
+    best = new Set(order.slice(0, FULL));
+  }
+  return best;
+}
+
 /* ---- exact squad dynamic program --------------------------------------------- */
 function DP(players, budget, rules, caps) {
   rules = rules || { full: 6, bench: 0.5, captain: 2.0 };

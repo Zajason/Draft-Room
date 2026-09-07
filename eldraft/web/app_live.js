@@ -86,8 +86,72 @@ function weekPts(codes,round){ const out=[]; let coach=0;
   out.sort((a,b)=>b-a); const k=RULES.full;
   let v=out.slice(0,k).reduce((a,b)=>a+b,0)+RULES.bench*out.slice(k).reduce((a,b)=>a+b,0);
   if(out.length)v+=(RULES.captain-1)*out[0]; return v+coach; }
-function weekCaptain(codes,round){ const outs=codes.map(c=>BY[c]).filter(p=>p.pos!=="H")
-  .sort((a,b)=>weeklyFP(b,round).fp-weeklyFP(a,round).fp); return outs[0]?outs[0].code:null; }
+function weekCaptain(codes,round){ const l=computeLineup(codes,round); return l.captain; }
+
+/* ---------- reactive lineup advisor: who to START (formation-legal 6 + captain),
+   who's on the bench, and the Tue–Fri timing/insurance that actually banks points. */
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function roundDays(round){ const games=(WK&&WK.schedule&&WK.schedule[String(round)])||[];
+  const dates=[...new Set(games.map(g=>g.date).filter(Boolean))].sort(); const di={};
+  dates.forEach((d,i)=>di[d]=i); return {dates,di,games}; }
+function playerDay(code,round){ const p=BY[code],team=p.clubCode,{games,di}=roundDays(round);
+  for(const g of games){ if(g.home===team||g.away===team) return {date:g.date,idx:di[g.date]}; }
+  return null; }
+function computeLineup(codes,round){
+  const out=codes.map(c=>BY[c]).filter(p=>p&&p.pos!=="H");
+  const coach=codes.map(c=>BY[c]).find(p=>p&&p.pos==="H")||null;
+  const fp=out.map(p=>weeklyFP(p,round).fp), pos=out.map(p=>p.pos);
+  const avail=out.map(p=>!S.excluded.has(p.code));
+  const fullIdx=(typeof chooseFullSix==="function")?chooseFullSix(fp,pos,avail)
+    : new Set(fp.map((_,i)=>i).sort((a,b)=>fp[b]-fp[a]).slice(0,RULES.full));
+  const starters=out.filter((_,i)=>fullIdx.has(i));
+  const bench=out.filter((_,i)=>!fullIdx.has(i));
+  let cap=null,capfp=-1; starters.forEach(p=>{const w=weeklyFP(p,round).fp;
+    if(!S.excluded.has(p.code)&&w>capfp){capfp=w;cap=p.code;}});
+  const startSet=new Set(starters.map(p=>p.code));
+  return {starters,bench,captain:cap,out,coach,startSet,
+    day:c=>playerDay(c,round)};
+}
+function last(nm){ return String(nm||"").split(" ").slice(-1)[0]; }
+function bestReplacement(LU,outP,round){
+  const cand=LU.bench.filter(b=>!S.excluded.has(b.code));
+  const same=cand.filter(b=>b.pos===outP.pos);
+  const pick=(same.length?same:cand).sort((a,b)=>weeklyFP(b,round).fp-weeklyFP(a,round).fp)[0];
+  return pick||null;
+}
+function firstOffBench(LU,round){
+  const avail=LU.bench.filter(b=>!S.excluded.has(b.code) && weeklyFP(b,round).fp>0)
+    .sort((a,b)=>weeklyFP(b,round).fp-weeklyFP(a,round).fp);
+  return avail.slice(0,2);
+}
+function lineupAdvice(LU,round){
+  const box=el("div",{class:"advice"});
+  box.appendChild(el("div",{class:"advice-h",text:"Lineup & timing"}));
+  const {dates}=roundDays(round);
+  const dl=d=>{try{return DOW[new Date(d+"T00:00:00").getDay()];}catch(e){return "";}};
+  const sl=el("div",{class:"tiny",style:"margin-bottom:4px"});
+  sl.appendChild(el("b",{text:"Start: "}));
+  sl.appendChild(document.createTextNode(LU.starters
+    .slice().sort((a,b)=>weeklyFP(b,round).fp-weeklyFP(a,round).fp)
+    .map(p=>last(p.name)+(p.code===LU.captain?" (C)":"")).join(", ")));
+  box.appendChild(sl);
+  if(dates.length>1)
+    box.appendChild(el("div",{class:"tiny muted",style:"margin-bottom:4px",
+      text:"Games span "+dates.map(dl).join(" / ")+" — lock each player before his tip; you can still move anyone who hasn't played."}));
+  else
+    box.appendChild(el("div",{class:"tiny muted",style:"margin-bottom:4px",
+      text:"All games on one day — set your 6 before tip; no in-week moves."}));
+  LU.starters.filter(p=>S.excluded.has(p.code)).forEach(o=>{
+    const rep=bestReplacement(LU,o,round);
+    box.appendChild(el("div",{class:"tiny",style:"color:var(--crit)"},[
+      el("b",{text:"⚠ "+last(o.name)+" out"}),
+      document.createTextNode(rep?(" → start "+last(rep.name)+" ("+rep.pos+")"):" → no legal bench cover")]));
+  });
+  const firsts=firstOffBench(LU,round);
+  if(firsts.length) box.appendChild(el("div",{class:"tiny muted",
+    text:"First off the bench if a starter sits: "+firsts.map(x=>{const d=LU.day(x.code);return last(x.name)+" ("+x.pos+(d?", "+dl(d.date):"")+")";}).join(", ")}));
+  return box;
+}
 
 /* ---------- the optimiser ---------- */
 function horizonPool(round,H){
@@ -170,24 +234,30 @@ function renderTeamsPanel(){
   [["G",RULES.slots.G],["F",RULES.slots.F],["C",RULES.slots.C],["H",1]].forEach(([pos,cap])=>{const have=cap-needs[pos];
     slots.appendChild(el("div",{class:"slot"+(have>=cap?" full":"")},[el("span",{class:"pos "+pos,text:pos}),el("b",{text:`${have}/${cap}`})]));});
   sq.appendChild(slots);
-  const cap=full?weekCaptain(t.squad,S.wkRound):null;
+  const LU=full?computeLineup(t.squad,S.wkRound):null;
+  const cap=LU?LU.captain:null;
   const list=el("div",{class:"mylist"});
   t.squad.map(c=>BY[c]).sort((a,b)=>(a.pos==="H")-(b.pos==="H")||weeklyFP(b,S.wkRound).fp-weeklyFP(a,S.wkRound).fp).forEach(p=>{
     const w=weeklyFP(p,S.wkRound), inj=S.excluded.has(p.code);
-    const r=el("div",{class:"myrow",style:"grid-template-columns:26px 1fr auto auto"});
+    const isStart=LU&&p.pos!=="H"&&LU.startSet.has(p.code);
+    const r=el("div",{class:"myrow",style:"grid-template-columns:26px auto 1fr auto auto"});
     r.appendChild(avatar(p,26));
+    // starter / bench chip (coach shown as its own slot)
+    r.appendChild(p.pos==="H"?el("span",{class:"lchip coach",text:"HC"})
+      :el("span",{class:"lchip "+(isStart?"start":"bench"),title:isStart?"Starter (full points)":"Bench (half points)",text:isStart?"ST":"BN"}));
     r.appendChild(el("div",{style:"min-width:0"},[el("div",{style:"font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},[
       document.createTextNode(p.name), p.code===cap?el("span",{class:"cap",style:"margin-left:6px",text:"C ×"+RULES.captain}):el("span"),
       inj?el("span",{class:"cap",style:"margin-left:6px;color:var(--crit)",text:"OUT"}):el("span")]),
       el("div",{class:"tiny muted",text:matchupText(w)})]));
     r.appendChild(el("span",{class:"mono tiny",text:n1(p.price)+"cr"}));
     const rr=el("div",{style:"display:flex;gap:8px;align-items:center"});
-    rr.appendChild(el("span",{class:"mono",style:"font-weight:600",text:n1(w.fp)}));
+    rr.appendChild(el("span",{class:"mono",style:"font-weight:600"+(isStart?"":";opacity:.55"),text:n1(w.fp)}));
     rr.appendChild(el("button",{class:"x",type:"button",title:"Remove",text:"×",onclick:()=>removeFromTeam(p.code)}));
     r.appendChild(rr); list.appendChild(r);
   });
   if(!t.squad.length)list.appendChild(el("div",{class:"tiny muted",text:"Add players from the board (+ Add), or use Auto-fill below."}));
   sq.appendChild(list);
+  if(LU) sq.appendChild(lineupAdvice(LU,S.wkRound));
   // squad card is appended LAST (after the plan card) — see end of function.
   if(!full){
     sq.appendChild(el("button",{class:"btn",style:"margin-top:10px",type:"button",text:"Auto-fill an optimal squad",onclick:autoFill}));
