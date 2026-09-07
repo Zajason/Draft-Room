@@ -87,11 +87,18 @@ POSITION_CORRECTION = 0.35
 # backtest.py, not by taste.
 MINUTE_CONCENTRATION = 1.6
 
-# How much a missed season is forgiven when projecting workload.  0 projects exactly the
-# minutes per team game a player realised (an injury follows him forever); 1 projects the
-# minutes he played when fit (injuries never happened).
+# The depth chart now allocates minutes-WHEN-FIT; availability is a separate, explicit
+# multiplier (see _durability), so these older single-blend constants are retired.
 INJURY_FORGIVENESS = 0.55
 LEAGUE_AVAIL = 0.88
+
+# Durability = expected share of his club's games a player actually suits up for, learned
+# from played_share (games played / the team's real games) across seasons, recency-
+# weighted, and shrunk toward the league norm so one thin season can't brand a player.
+# EuroLeague/EuroCup only: NBA games-played conflates load-management rest with injury.
+DUR_PRIOR = 0.85           # league-average availability
+DUR_SHRINK = 1.0           # season-equivalents of prior mixed in
+DUR_FLOOR = 0.40
 
 # Width of the projection's own uncertainty, as a coefficient of variation: a floor for
 # a player we know well, plus a term that grows as the sample thins.  Calibrated so that
@@ -281,12 +288,11 @@ def _raw_minute_prior(p: dict, priors: Dict[str, Tuple[float, float]], hz: Horiz
     # EuroCup and NBA minutes both translate down: EuroCup rotations are shallower and
     # NBA role does not carry over cleanly to a 40-minute European game.
     conv = {"EL": 1.0, "EC": 0.86, "NBA": 0.92}
-    # Blend the player's realised minutes per team game with what he played when fit.
-    # Pure realised minutes would punish a one-off injury season forever; pure per-
-    # appearance minutes would ignore genuine durability problems.
+    # Minutes WHEN FIT (per appearance): the depth chart allocates the role a player holds
+    # when he suits up.  Availability is applied separately and explicitly as durability,
+    # so an injury season shrinks his value once, through durability, not twice.
     raw = sum(
-        o["gp"] * o["w"] * conv[o["league"]]
-        * (INJURY_FORGIVENESS * o["mpg"] * LEAGUE_AVAIL + (1.0 - INJURY_FORGIVENESS) * o["mptg"])
+        o["gp"] * o["w"] * conv[o["league"]] * o["mpg"]
         for o in obs
     ) / wsum
 
@@ -300,6 +306,24 @@ def _raw_minute_prior(p: dict, priors: Dict[str, Tuple[float, float]], hz: Horiz
     if p.get("age") and p["age"] > 33:
         shrunk *= max(0.72, 1.0 - 0.045 * (p["age"] - 33))
     return max(0.0, shrunk)
+
+
+def _durability(p: dict, hz: Horizon = None) -> float:
+    """Expected share of club games the player suits up for, from multi-season history.
+
+    Each season is one observation of his durability regardless of how few games it
+    contains - a four-game injury year is weighted by recency like any other, not shrunk
+    away for being small, because "he was hurt" is exactly the signal we want to keep.
+    """
+    obs = _observations(p, hz)
+    rows = [(o["w"], o["played_share"]) for o in obs
+            if o["league"] in ("EL", "EC") and o.get("played_share") is not None]
+    if not rows:
+        return DUR_PRIOR
+    wsum = sum(w for w, _ in rows)
+    psum = sum(w * ps for w, ps in rows)
+    dur = (psum + DUR_SHRINK * DUR_PRIOR) / (wsum + DUR_SHRINK)
+    return max(DUR_FLOOR, min(1.0, dur))
 
 
 def allocate_minutes(players: List[dict], priors: Dict[str, Tuple[float, float]], hz: Horizon = None) -> None:
@@ -488,24 +512,19 @@ def project_all(players: List[dict], hz: Horizon = None) -> List[dict]:
         prof = gamelog_profile(p, hz)
         p["profile"] = prof
 
-        # mpg_proj is expected minutes per TEAM game, so it already carries the games a
-        # player is expected to miss; multiplying by availability again would double-count.
-        mptg = p.get("mpg_proj", 0.0)
+        # mpg_proj is now minutes WHEN FIT (the depth-chart role); durability carries the
+        # games he is expected to miss and is applied explicitly, exactly once.
+        mpg_fit = p.get("mpg_proj", 0.0)
         tctx = ctx.get(p.get("club"), 1.0)
-        base = rate["rate"] * mptg / 40.0 * tctx
-
-        # Availability: last season's played share, shrunk toward the league norm so a
-        # player with a handful of listed games is not condemned by a small sample.
-        avail_obs = prof.get("availability")
-        n_listed = prof.get("games_listed") or 0
-        avail = ((avail_obs * n_listed + 0.88 * 12.0) / (n_listed + 12.0)) if avail_obs is not None else 0.88
-        avail = max(0.55, min(1.0, avail))
+        avail = _durability(p, hz)
+        base = rate["rate"] * mpg_fit / 40.0 * tctx           # points on a night he plays
 
         p["fp_raw"] = round(base, 3)
-        p["fp"] = round(base, 3)
-        p["availability"] = round(avail, 3)
+        p["fp"] = round(base * avail, 3)                      # expected points per team game
+        p["durability"] = round(avail, 3)
+        p["availability"] = round(avail, 3)                   # kept for existing consumers
         # Minutes on the night he actually suits up - the number a reader recognises.
-        p["mpg_when_playing"] = round(mptg / max(0.4, avail), 2)
+        p["mpg_when_playing"] = round(mpg_fit, 2)
         p["rate_p40"] = round(rate["rate"], 2)
         p["sample_minutes"] = round(rate["eff_minutes"], 1)
         p["sample_leagues"] = rate["sample_leagues"]

@@ -47,6 +47,7 @@ def _player(p: dict) -> dict:
         "age": _r(p.get("age"), 1), "price": _r(p.get("price"), 1),
         "priceSource": p.get("price_source"),
         "fp": _r(p.get("fp")), "sigma": _r(p.get("fp_sigma")),
+        "fpFit": _r(p.get("fp_raw")), "dur": _r(p.get("durability"), 3),
         "mptg": _r(p.get("mpg_proj"), 1), "rate": _r(p.get("rate_p40"), 1),
         "ovr": r.get("overall"), "pot": r.get("potential"), "val": r.get("value"),
         "leagues": p.get("sample_leagues") or [], "unknown": bool(p.get("unknown")),

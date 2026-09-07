@@ -193,11 +193,15 @@ def commit_lineup(mean: Sequence[float], pos: Sequence[str]) -> float:
 # Monte-Carlo squad objective: value a squad by its availability-aware weekly points
 # ======================================================================================
 def default_pplay(p: dict) -> float:
-    """Prior probability a player suits up for a given round, from his projected role.
+    """Prior probability a player suits up for a given round.
 
-    Rotation regulars miss the odd game; deep-bench and fringe players miss more.  Scaled
-    off projected minutes when we have them, else a flat rotation prior.
+    Uses the projection's multi-season durability when present (games played vs the
+    club's real games, recency-weighted) - the honest injury-proneness signal.  Falls
+    back to a minutes-based rotation prior, then a flat prior.
     """
+    dur = p.get("durability")
+    if dur is not None:
+        return float(min(0.98, max(0.40, dur)))
     mpg = p.get("mpg_proj") or p.get("mpg_when_playing")
     if mpg is None:
         return 0.88

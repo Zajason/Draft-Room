@@ -667,6 +667,37 @@ function priceCell(p){
     inp.addEventListener("keydown",ev=>{if(ev.key==="Enter"){done(true);}else if(ev.key==="Escape"){done(false);}});});
   td.appendChild(span);return td;
 }
+// Role override: the model can't know a player was miscast last year (e.g. a lead guard
+// buried on a deep team) or will be the go-to man on a new club. Let the user set his
+// expected minutes-when-fit; the projection scales with minutes (fp = fpFit·mins/mptg·dur)
+// and every engine — weekly, draft, optimiser — uses the corrected number.
+const ORIG_MPTG={}, ORIG_FP={}; ALL.forEach(p=>{ORIG_MPTG[p.code]=p.mptg; ORIG_FP[p.code]=p.fp;});
+const LSKEY_ROLES="elsr_roles_v1";
+let ROLES={};
+function applyRole(code){ const m=ROLES[code]; const om=ORIG_MPTG[code];
+  if(m!=null && om){ BY[code].fp=+(ORIG_FP[code]*(m/om)).toFixed(3); BY[code].mptg=m; }
+  else { BY[code].fp=ORIG_FP[code]; BY[code].mptg=ORIG_MPTG[code]; } }
+function loadRoles(){ try{const r=localStorage.getItem(LSKEY_ROLES); if(r)ROLES=JSON.parse(r)||{};}catch(e){} for(const c in ROLES) applyRole(c); }
+function saveRoles(){ try{localStorage.setItem(LSKEY_ROLES, JSON.stringify(ROLES));}catch(e){} }
+function setRole(code,mins){ mins=Math.round(mins*10)/10;
+  if(!(mins>0)||Math.abs(mins-ORIG_MPTG[code])<0.05){delete ROLES[code];}else{ROLES[code]=mins;}
+  applyRole(code); saveRoles(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function resetRoles(){ for(const c in ROLES){ROLES[c]=null;applyRole(c);} ROLES={}; saveRoles(); if(S.mode==="weekly")S.plan=null; refresh(); }
+function minsCell(p){
+  const td=el("td",{class:"num"});
+  if(p.mptg==null){ td.appendChild(el("span",{class:"muted",text:"–"})); return td; }
+  const edited=ROLES[p.code]!=null;
+  const dur=(p.dur!=null&&p.dur<0.75)?(" · "+Math.round(p.dur*100)+"% avail"):"";
+  const title=edited?("Role override (model "+n1(ORIG_MPTG[p.code])+" min) — click to change"+dur)
+                    :("Projected minutes when fit — click to override his role"+dur);
+  const span=el("span",{class:"cred"+(edited?" edited":""),title:title,text:n1(p.mptg)});
+  span.addEventListener("click",e=>{e.stopPropagation();const inp=el("input",{class:"credinp",type:"number",step:"0.5",min:"0",max:"40",value:p.mptg});
+    td.innerHTML="";td.appendChild(inp);inp.focus();inp.select();
+    const done=commit=>{if(commit){const v=parseFloat(inp.value);if(!isNaN(v)&&v>=0){setRole(p.code,v);return;}}renderBoard();};
+    inp.addEventListener("blur",()=>done(true));
+    inp.addEventListener("keydown",ev=>{if(ev.key==="Enter"){done(true);}else if(ev.key==="Escape"){done(false);}});});
+  td.appendChild(span);return td;
+}
 const CAPS_WEEKLY=[RULES.slots.G,RULES.slots.F,RULES.slots.C,1];
 const CAPS_DRAFT=[RULES.slots.G,RULES.slots.F,RULES.slots.C,0];
 const CLUBNAME=DATA.clubNames||{}, clubName=c=>CLUBNAME[c]||c, CREST=DATA.crests||{};
@@ -1072,7 +1103,7 @@ function renderBoard(){
       row.appendChild(el("td",{class:"num muted",text:n1(p.fp)}));
       row.appendChild(el("td",{class:"num"},[ratChip(p.ovr)]));
     } else { row.appendChild(el("td",{class:"num",text:n1(p.fp)}));
-      row.appendChild(el("td",{class:"num muted",text:p.mptg==null?"–":n1(p.mptg)}));
+      row.appendChild(minsCell(p));
       row.appendChild(el("td",{class:"num"},[ratChip(p.ovr)])); row.appendChild(el("td",{class:"num"},[ratChip(p.val)])); }
     const act=el("td",{},[]);
     if(S.mode==="weekly"){ const w=el("div",{class:"acts"});
@@ -1111,7 +1142,7 @@ function refreshPriceHint(){ var h=$("#pricehint"); if(!h)return; var n=Object.k
   var r=$("#resetprices"); if(r) r.addEventListener("click",function(e){e.preventDefault();resetPrices();}); }
 function refresh(){ renderHeader(); refreshPriceHint(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
 function boot(){
-  loadTeams(); loadPrices();
+  loadTeams(); loadPrices(); loadRoles();
   if(SCOUT_URL&&SCOUT_URL.indexOf("http")===0)$("#scoutlink").href=SCOUT_URL; else $("#scoutlink").classList.add("hide");
   $("#modetabs").addEventListener("click",e=>{const t=e.target.closest(".modetab");if(t)setMode(t.dataset.mode);});
   const pf=$("#posf"); [["ALL","All"],["G","G"],["F","F"],["C","C"],["H","Coach"]].forEach(([v,l])=>
