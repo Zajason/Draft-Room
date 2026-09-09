@@ -74,12 +74,16 @@ class SquadDP:
     def __init__(self, players: Sequence[dict], budget: float,
                  slots: Optional[Slots] = None, rules=RULES,
                  score_key: str = "fp",
-                 forced: Optional[set] = None, excluded: Optional[set] = None):
+                 forced: Optional[set] = None, excluded: Optional[set] = None,
+                 no_budget: bool = False):
         self.forced = set(forced or ())
         self.excluded = set(excluded or ())
         self.rules = rules
         self.slots = slots or Slots()
-        self.B = _credits_to_units(budget)
+        # A snake draft has no salary cap: with no_budget the credit dimension collapses to
+        # a single bin and every player costs nothing, so only position slots constrain.
+        self.no_budget = no_budget
+        self.B = 0 if no_budget else _credits_to_units(budget)
         self.players = list(players)
         self.score_key = score_key
 
@@ -118,6 +122,9 @@ class SquadDP:
     def _axis(self, pos: str) -> int:
         return Slots.ORDER.index(pos)
 
+    def _cost(self, p: dict) -> int:
+        return 0 if self.no_budget else _credits_to_units(p["price"])
+
     # -- passes ------------------------------------------------------------------------
     def _must(self, i: int, p: dict) -> bool:
         return bool(p.get("mandatory")) or i in self.forced
@@ -128,7 +135,7 @@ class SquadDP:
             return cur
         must = self._must(i, p)
         ax = self._axis(p.get("position", "F"))
-        cost = _credits_to_units(p["price"])
+        cost = self._cost(p)
         cap = self.slots.caps[Slots.ORDER[ax]]
         if cap == 0 or cost > self.B:
             return cur if not must else self._empty()
@@ -149,7 +156,7 @@ class SquadDP:
             return nxt
         must = self._must(i, p)
         ax = self._axis(p.get("position", "F"))
-        cost = _credits_to_units(p["price"])
+        cost = self._cost(p)
         cap = self.slots.caps[Slots.ORDER[ax]]
         if cap == 0 or cost > self.B:
             return nxt if not must else self._empty()
@@ -191,7 +198,7 @@ class SquadDP:
             if not self._must(i, p) and abs(prev[tuple(state)] - fwd[k][tuple(state)]) < 1e-4:
                 continue                                    # p was skipped on this path
             ax = self._axis(p.get("position", "F"))
-            cost = _credits_to_units(p["price"])
+            cost = self._cost(p)
             cand = list(state)
             cand[ax] -= 1
             cand[4] -= cost
@@ -239,7 +246,7 @@ class SquadDP:
         for k, i in enumerate(self.order):
             p = self.players[i]
             ax = self._axis(p.get("position", "F"))
-            cost = _credits_to_units(p["price"])
+            cost = self._cost(p)
             cap = self.slots.caps[Slots.ORDER[ax]]
             before = fwd[k]                                   # states reachable before p
             after = bwd[k + 1]                                # value from p+1 onward
@@ -452,7 +459,12 @@ def robust_draft(
     """
     slots = slots or Slots()
     rules = RULES
-    base = SquadDP(pool, budget, slots)
+    # budget=None => snake draft: no salary cap. The DP ignores cost (no_budget); the swap
+    # helpers get an unreachable budget so their price checks never bind.
+    no_budget = budget is None
+    dp_budget = 0.0 if no_budget else budget
+    swap_budget = 1e9 if no_budget else budget
+    base = SquadDP(pool, dp_budget, slots, no_budget=no_budget)
     base_value, base_idx = base.solve()
     if not math.isfinite(base_value):
         raise ValueError(
@@ -465,7 +477,7 @@ def robust_draft(
     draws = np.vstack([_sample_scores(pool, rng) for _ in range(max(1, n_sims))])
 
     dp_expected = _squad_value(base_idx, draws, pool, rules)
-    squad, n_swaps = polish_squad(base_idx, pool, budget, draws, rules)
+    squad, n_swaps = polish_squad(base_idx, pool, swap_budget, draws, rules)
     squad_expected = _squad_value(squad, draws, pool, rules)
     in_squad = {i: slot for slot, i in enumerate(squad)}
 
@@ -478,7 +490,7 @@ def robust_draft(
             q = dict(p)
             q["_scen"] = float(sc)
             scen.append(q)
-        _, idx = SquadDP(scen, budget, slots, rules, score_key="_scen").solve()
+        _, idx = SquadDP(scen, dp_budget, slots, rules, score_key="_scen", no_budget=no_budget).solve()
         for i in idx:
             picked[i] += 1
 
@@ -495,12 +507,12 @@ def robust_draft(
             slot = in_squad[i]
             if slot not in replacement_cache:
                 replacement_cache[slot] = _best_replacement_for(
-                    squad, slot, pool, budget, draws, rules)
+                    squad, slot, pool, swap_budget, draws, rules)
             alt, alt_val = replacement_cache[slot]
             dv = squad_expected - alt_val if math.isfinite(alt_val) else None
             replaces = pool[alt[slot]]["name"] if alt else None
         else:
-            alt, alt_val = _best_swap_in(squad, i, pool, budget, draws, rules)
+            alt, alt_val = _best_swap_in(squad, i, pool, swap_budget, draws, rules)
             dv = (alt_val - squad_expected) if math.isfinite(alt_val) else None
             if alt is not None:
                 for slot, j in enumerate(squad):

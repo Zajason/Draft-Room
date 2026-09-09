@@ -43,8 +43,11 @@ class DraftUniverse:
         self.pos = np.array([POS_IX.get(p.get("position", "F"), 1) for p in pool], dtype=np.int8)
         self.fp = np.array([float(p.get("fp") or 0.0) for p in pool], dtype=np.float64)
         self.sigma = np.array([float(p.get("fp_sigma") or 0.0) for p in pool], dtype=np.float64)
-        self.price = np.array([float(p.get("price") or rules.price_min) for p in pool], dtype=np.float64)
-        self.units = np.array([_credits_to_units(p.get("price") or rules.price_min) for p in pool], dtype=np.int32)
+        # A real 0.0 (a snake draft with prices zeroed) must be kept, not read as "missing"
+        # and back-filled to price_min - otherwise a zero budget makes nothing affordable.
+        _pr = [rules.price_min if p.get("price") is None else float(p["price"]) for p in pool]
+        self.price = np.array(_pr, dtype=np.float64)
+        self.units = np.array([_credits_to_units(x) for x in _pr], dtype=np.int32)
         self.by_code = {c: i for i, c in enumerate(self.code)}
 
         # Slot template every team must fill, in POS order.

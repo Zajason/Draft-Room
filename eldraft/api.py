@@ -210,7 +210,7 @@ def draft_pick(req: DraftReq):
         pool = _pool_for([p["code"] for p in b["players"]
                           if p["code"] not in taken or p["code"] in mine],
                          list(mine), coach=False)
-        res = robust_draft(pool, req.budget, Slots(coach=False), n_sims=200, top_k=req.top)
+        res = robust_draft(pool, None, Slots(coach=False), n_sims=200, top_k=req.top)  # snake draft: no cap
         board_rows = [r for r in res["ranking"] if not r["mandatory"]]
         return {"engine": "greedy",
                 "picks": [{"name": r["name"], "position": r["position"], "club": r["club"],
@@ -221,15 +221,16 @@ def draft_pick(req: DraftReq):
     from .draft_sim import DraftUniverse
     from .mcts import MCTS
     players = [p for p in b["players"] if p.get("position") != "H"]
+    # Snake draft: no salary cap, so zero prices and budget — only roster slots constrain.
     uni_players = [{"code": p["code"], "name": p["name"], "position": p["position"],
-                    "price": p["price"], "fp": p["fp"], "club": p.get("club"),
+                    "price": 0.0, "fp": p["fp"], "club": p.get("club"),
                     "club_name": p.get("club_name"), "fp_sigma": p.get("fp_sigma")} for p in players]
     from .draft_sim import state_at_my_turn
     uni = DraftUniverse(uni_players, coach=False)
     seat = req.my_slot - 1
     taken_idx = [uni.by_code[c] for c in taken if c in uni.by_code]
     mine_idx = [uni.by_code[c] for c in mine if c in uni.by_code]
-    state = state_at_my_turn(uni, req.n_teams, seat, mine_idx, taken_idx, budget=req.budget)
+    state = state_at_my_turn(uni, req.n_teams, seat, mine_idx, taken_idx, budget=0.0)
     if state.done or state.teams[seat].needs.sum() == 0:
         return {"engine": "mcts", "picks": [], "note": "squad already complete"}
     rank = MCTS(uni, seat, req.n_teams, sims=req.sims).run(state)["ranking"]

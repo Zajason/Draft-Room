@@ -368,23 +368,23 @@ function draftPool(){ const pool=[]; ALL.forEach(p=>{ if(p.pos==="H")return;
 function draftNeeded(){ const nd=needs(); return nd.G+nd.F+nd.C>0; }
 function computeDraftRec(){
   if(!draftNeeded()){ S.rec=[]; renderRec(); renderBoard(); return; }
+  // A snake draft has no salary cap: price is irrelevant, only roster slots constrain who
+  // you take. Zeroing prices (and the budget) makes every engine rank on pure draft value
+  // — the projection already carries cross-league form, positional minutes and durability.
   if(S.engine==="greedy"){
-    const pool=draftPool(); const res=greedyRecommend(pool,RULES.budget,{full:RULES.full,bench:RULES.bench,captain:RULES.captain},CAPS_DRAFT);
-    const nd=needs(), rem=RULES.budget-draftSpent(), rows=[];
-    res.rows.forEach(r=>{const p=pool[r.i]; if(p.mandatory)return; if(nd[p.pos]<=0)return; if((p.price||0)>rem+1e-6)return; if(r.vorp==null)return; rows.push({code:p.code,metric:r.vorp});});
+    const pool=draftPool().map(p=>Object.assign({},p,{price:0})); const res=greedyRecommend(pool,0,{full:RULES.full,bench:RULES.bench,captain:RULES.captain},CAPS_DRAFT);
+    const nd=needs(), rows=[];
+    res.rows.forEach(r=>{const p=pool[r.i]; if(p.mandatory)return; if(nd[p.pos]<=0)return; if(r.vorp==null)return; rows.push({code:p.code,metric:r.vorp});});
     rows.sort((a,b)=>b.metric-a.metric); S.rec=rows; renderRec(); renderBoard();
   } else { S.computing=true; renderRec();
     setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(30,Math.min(600,+$("#sims").value||140));
-      const players=ALL.filter(p=>p.pos!=="H"); S.rec=mctsRecommend(players,BY,S.mine,S.taken,{budget:RULES.budget,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
+      const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0})); S.rec=mctsRecommend(players,BY,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
     }catch(e){console.error(e);S.rec=[];} S.computing=false; renderRec(); renderBoard(); },30); }
 }
 function renderDraftPanel(){
-  const host=$("#panel"); host.innerHTML=""; const nd=needs(), sp=draftSpent();
+  const host=$("#panel"); host.innerHTML=""; const nd=needs();
   const sq=el("div",{class:"card pad"});
   sq.appendChild(el("div",{class:"sec-h"},[el("h2",{text:"My squad"}),el("span",{class:"muted",text:`${S.mine.length} of ${RULES.slots.G+RULES.slots.F+RULES.slots.C} picked`})]));
-  const bud=el("div",{class:"budget"}); bud.appendChild(el("b",{text:sp.toFixed(1)+" cr"}));
-  const bar=el("div",{class:"bar"});bar.appendChild(el("i",{class:sp>RULES.budget?"over":"",style:`width:${Math.min(100,sp/RULES.budget*100)}%`}));
-  bud.appendChild(bar);bud.appendChild(el("span",{class:"tiny muted",text:(RULES.budget-sp).toFixed(1)+" left"})); sq.appendChild(bud);
   const slots=el("div",{class:"slots"});
   [["G",RULES.slots.G],["F",RULES.slots.F],["C",RULES.slots.C]].forEach(([pos,cap])=>{const have=cap-nd[pos];
     slots.appendChild(el("div",{class:"slot"+(have>=cap?" full":"")},[el("span",{class:"pos "+pos,text:pos}),el("b",{text:`${have}/${cap}`})]));});
@@ -490,7 +490,7 @@ function renderHeader(){
     const stats=t?[[`R${S.wkRound}`,"Round"],[t.cr.toFixed(0),"CR"],[teamFull(t)?n1(weekPts(t.squad,S.wkRound)):"—","Wk proj"],[`${t.squad.length}/${SQUAD_N}`,"Squad"]]:[[`R${S.wkRound}`,"Round"],["—","CR"],["—","Wk proj"],["0/"+SQUAD_N,"Squad"]];
     stats.forEach(s=>h.appendChild(el("div",{class:"hstat"},[el("b",{text:s[0]}),el("span",{text:s[1]})])));
   } else { const nd=needs();
-    [[draftSpent().toFixed(1),"Credits"],[String(nd.G+nd.F+nd.C),"To pick"],[weekPts?"":"",""]].slice(0,2).concat([[weekPtsDraft(),"Proj"]]).forEach(s=>h.appendChild(el("div",{class:"hstat"},[el("b",{text:s[0]}),el("span",{text:s[1]})]))); }
+    [[String(S.mine.length),"Picked"],[String(nd.G+nd.F+nd.C),"To pick"],[weekPtsDraft(),"Proj"]].forEach(s=>h.appendChild(el("div",{class:"hstat"},[el("b",{text:s[0]}),el("span",{text:s[1]})]))); }
 }
 function weekPtsDraft(){ const out=S.mine.map(c=>BY[c].fp).sort((a,b)=>b-a); const k=RULES.full; let v=out.slice(0,k).reduce((a,b)=>a+b,0)+RULES.bench*out.slice(k).reduce((a,b)=>a+b,0); if(out.length)v+=(RULES.captain-1)*out[0]; return v.toFixed(0); }
 function setMode(m){ S.mode=m; sortK=m==="weekly"?"_wkfp":"fp"; sortDir=-1;

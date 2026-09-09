@@ -60,24 +60,25 @@ def cmd_draft(args) -> int:
     pool, mine, _ = draft_pool(board, include_coach=not args.no_coach)
 
     slots = Slots(coach=not args.no_coach)
-    budget = args.budget if args.budget is not None else RULES.budget
+    # A snake draft has no salary cap: default to no budget (price is ignored, only roster
+    # slots constrain). Pass --budget only for an auction-style draft.
+    budget = args.budget
 
     if mine:
-        spent = sum(p["price"] for p in mine)
-        print("\nalready on your roster ({} players, {:.1f} credits spent):".format(len(mine), spent))
+        print("\nalready on your roster ({} players):".format(len(mine)))
         for p in sorted(mine, key=lambda x: -x["fp"]):
-            print("  {:<26} {:<2} {:<16} {:>5.1f} cr   proj {:>5.2f}".format(
-                p["name"], p["position"], (p.get("club_name") or "")[:16], p["price"], p["fp"]))
+            print("  {:<26} {:<2} {:<16} proj {:>5.2f}".format(
+                p["name"], p["position"], (p.get("club_name") or "")[:16], p["fp"]))
         need = dict(slots.caps)
         for p in mine:
             need[p["position"]] = max(0, need.get(p["position"], 0) - 1)
         print("  still to fill: " + ", ".join(
-            "{}x{}".format(v, k) for k, v in need.items() if v) + "   |   {:.1f} credits left".format(budget - spent))
+            "{}x{}".format(v, k) for k, v in need.items() if v))
 
     res = robust_draft(pool, budget, slots, n_sims=args.sims, top_k=args.top)
 
-    print("\nRECOMMENDED SQUAD  (expected {:.1f} fantasy points per round, {:.1f} credits)".format(
-        res["squad_expected_value"], res["squad_cost"]))
+    print("\nRECOMMENDED SQUAD  (expected {:.1f} fantasy points per round)".format(
+        res["squad_expected_value"]))
     squad = sorted(res["squad"], key=lambda p: (p["position"] == "H", -p["fp"]))
     k = RULES.full_credit_slots
     outfield = [p for p in squad if p["position"] != "H"]
