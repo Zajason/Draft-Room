@@ -100,6 +100,13 @@ DUR_PRIOR = 0.85           # league-average availability
 DUR_SHRINK = 1.0           # season-equivalents of prior mixed in
 DUR_FLOOR = 0.40
 
+# "Trust proven minutes": a player with a stable, established role at the SAME club has
+# already earned those minutes despite that club's depth, so the zero-sum re-allocation
+# shouldn't tax him again for competition his own history survived.  When his allocation
+# comes in below his proven same-club minutes, pull it back up (then the club is re-
+# normalised, so the lift comes out of the churn around him - which is the honest trade).
+STABILITY_W_MAX = 0.6      # most of the way back to proven minutes for a rock-stable role
+
 # Width of the projection's own uncertainty, as a coefficient of variation: a floor for
 # a player we know well, plus a term that grows as the sample thins.  Calibrated so that
 # roughly 68% of outcomes land inside one sigma in the backtests.
@@ -326,6 +333,51 @@ def _durability(p: dict, hz: Horizon = None) -> float:
     return max(DUR_FLOOR, min(1.0, dur))
 
 
+def _same_club_el_minutes(p: dict, hz: Horizon) -> List[Tuple[float, float, float]]:
+    """(mpg, gp, recency weight) for the EuroLeague seasons the player spent at his club."""
+    club = p.get("club")
+    if not club:
+        return []
+    decay = WEIGHTS.season_decay
+    rows = []
+    for i, s in enumerate(hz.el):
+        b = (p.get("el") or {}).get(s)
+        if b and b.get("team") == club and b.get("min", 0) > 0 and b.get("mpg"):
+            rows.append((float(b["mpg"]), float(b.get("gp", 0)), decay[min(i, len(decay) - 1)]))
+    return rows
+
+
+def _proven_minutes(p: dict, hz: Horizon) -> float:
+    """Recency-weighted minutes-per-appearance the player has actually held at his club."""
+    rows = _same_club_el_minutes(p, hz)
+    wsum = sum(w for _, _, w in rows)
+    return sum(m * w for m, _, w in rows) / wsum if wsum else 0.0
+
+
+def _role_stability(p: dict, hz: Horizon) -> float:
+    """0..STABILITY_W_MAX: how much to trust a player's proven same-club minutes.
+
+    High only when he has several EuroLeague seasons at THIS club, a consistent workload
+    across them, and a real rotation role - i.e. a proven starter, not a fringe piece or a
+    newcomer whose minutes the model genuinely has to guess at.
+    """
+    if p.get("new_to_team"):
+        return 0.0
+    rows = _same_club_el_minutes(p, hz)
+    if len(rows) < 2:
+        return 0.0
+    mpgs = [m for m, _, _ in rows]
+    mean = sum(mpgs) / len(mpgs)
+    if mean <= 0:
+        return 0.0
+    var = sum((m - mean) ** 2 for m in mpgs) / len(mpgs)
+    cv = (var ** 0.5) / mean
+    consistency = max(0.0, min(1.0, 1.0 - cv / 0.30))      # cv 0 -> 1, cv >= 0.30 -> 0
+    tenure = min(1.0, (len(rows) - 1) / 2.0)               # 2 seasons -> 0.5, 3+ -> 1
+    established = max(0.0, min(1.0, (mean - 12.0) / 12.0))  # <=12 mpg -> 0, >=24 -> 1
+    return STABILITY_W_MAX * consistency * tenure * established
+
+
 def allocate_minutes(players: List[dict], priors: Dict[str, Tuple[float, float]], hz: Horizon = None) -> None:
     """Distribute each club's 200 minutes per game across its actual roster, in place.
 
@@ -346,6 +398,8 @@ def allocate_minutes(players: List[dict], priors: Dict[str, Tuple[float, float]]
     by_club: Dict[str, List[dict]] = {}
     for p in players:
         p["_mpg_prior"] = _raw_minute_prior(p, priors, hz)
+        p["_proven_mpg"] = _proven_minutes(p, hz)
+        p["_role_stability"] = _role_stability(p, hz)
         # Better players earn a larger share of the pool than their raw prior implies.
         talent = max(0.35, min(2.0, p["_rate"]["rate"] / max(1e-6, priors[p["position"]][0])))
         p["_claim"] = p["_mpg_prior"] * (talent ** 0.85)
@@ -381,6 +435,22 @@ def allocate_minutes(players: List[dict], priors: Dict[str, Tuple[float, float]]
                 factor = (target / actual) ** POSITION_CORRECTION
                 for p in group:
                     alloc[id(p)] *= factor
+            total = sum(alloc.values()) or 1.0
+            for p in squad:
+                alloc[id(p)] *= CLUB_MINUTES / total
+
+        # 2.5 trust proven minutes -----------------------------------------------------
+        # A stable, established starter has already earned his minutes at this club; lift
+        # him back toward them where the re-allocation squeezed him below, then re-normalise
+        # so the minutes come out of the uncertain depth around him (zero-sum preserved).
+        lifted = False
+        for p in squad:
+            w = p.get("_role_stability", 0.0)
+            proven = p.get("_proven_mpg", 0.0)
+            if w > 0 and proven > alloc[id(p)]:
+                alloc[id(p)] += w * (proven - alloc[id(p)])
+                lifted = True
+        if lifted:
             total = sum(alloc.values()) or 1.0
             for p in squad:
                 alloc[id(p)] *= CLUB_MINUTES / total
