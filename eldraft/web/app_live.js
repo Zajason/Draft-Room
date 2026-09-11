@@ -377,8 +377,10 @@ function computeDraftRec(){
     res.rows.forEach(r=>{const p=pool[r.i]; if(p.mandatory)return; if(nd[p.pos]<=0)return; if(r.vorp==null)return; rows.push({code:p.code,metric:r.vorp});});
     rows.sort((a,b)=>b.metric-a.metric); S.rec=rows; renderRec(); renderBoard();
   } else { S.computing=true; renderRec();
-    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(30,Math.min(600,+$("#sims").value||140));
-      const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0})); S.rec=mctsRecommend(players,BY,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
+    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(50,Math.min(6000,+$("#sims").value||400));
+      const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0}));
+      const plan=draftPlan(players,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
+      S.rec=plan.now; S.draftPlan=plan.rounds;
     }catch(e){console.error(e);S.rec=[];} S.computing=false; renderRec(); renderBoard(); },30); }
 }
 function renderDraftPanel(){
@@ -406,7 +408,7 @@ function renderDraftPanel(){
   const setrow=el("div",{class:"setrow"+(S.engine==="mcts"?"":" hide"),id:"mcts-set"});
   setrow.appendChild(el("label",{},[el("span",{text:"Teams"}),el("input",{type:"number",id:"nteams",min:"2",max:"16",value:"8",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
   setrow.appendChild(el("label",{},[el("span",{text:"My slot"}),el("input",{type:"number",id:"myslot",min:"1",max:"16",value:"1",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
-  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"30",max:"600",step:"10",value:"140",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
+  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"50",max:"6000",step:"100",value:"600",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
   rec.appendChild(setrow); rec.appendChild(el("div",{id:"rec"}));
   const rb=el("div",{class:"rowbtns"}); rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Undo last",onclick:undo}));
   rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Reset",onclick:()=>{S.mine=[];S.taken=new Set();S.history=[];refresh();}})); rec.appendChild(rb);
@@ -416,14 +418,29 @@ function renderRec(){ const host=$("#rec"); if(!host)return; host.innerHTML="";
   if(!draftNeeded()){ host.appendChild(el("div",{class:"note",text:"Your squad is complete — 10 players."})); return; }
   if(S.computing){ host.appendChild(el("div",{class:"recrow"},[el("span",{class:"rk",html:'<span class="spin"></span>'}),el("div",{class:"nm"},[el("b",{text:"Searching drafts…"}),el("span",{text:"running the lookahead"})]),el("span",{})])); return; }
   if(!S.rec.length){ host.appendChild(el("div",{class:"tiny muted",text:"No legal pick fits your budget and slots."})); return; }
-  const list=el("div",{class:"reclist"}), label=S.engine==="mcts"?"visits":"pts added";
+  const list=el("div",{class:"reclist"}), label=S.engine==="mcts"?"squad EV":"pts added";
   S.rec.slice(0,7).forEach((r,i)=>{const p=BY[r.code];
     const row=el("div",{class:"recrow"+(i===0?" top":""),style:"grid-template-columns:22px 30px 1fr auto",onclick:()=>draftMine(r.code)});
     row.appendChild(el("span",{class:"rk",text:String(i+1)})); row.appendChild(avatar(p,30));
-    row.appendChild(el("div",{class:"nm"},[el("b",{text:p.name}),el("span",{html:`<span class="pos ${p.pos}" style="width:14px;height:14px;font-size:8px;vertical-align:-2px">${p.pos}</span> ${p.club||""} · ${n1(p.price)}cr · proj ${n1(p.fp)}`})]));
-    const sc=el("div",{class:"sc"}); sc.appendChild(el("b",{text:S.engine==="mcts"?String(r.metric):(r.metric>=0?"+":"")+n2(r.metric)})); sc.appendChild(el("span",{text:label}));
+    row.appendChild(el("div",{class:"nm"},[el("b",{text:p.name}),el("span",{html:`<span class="pos ${p.pos}" style="width:14px;height:14px;font-size:8px;vertical-align:-2px">${p.pos}</span> ${p.club||""} · proj ${n1(p.fp)}`})]));
+    const sc=el("div",{class:"sc"}); sc.appendChild(el("b",{text:S.engine==="mcts"?n1(r.metric):(r.metric>=0?"+":"")+n2(r.metric)})); sc.appendChild(el("span",{text:label}));
     row.appendChild(sc); list.appendChild(row);});
   host.appendChild(list);
+  // multi-round plan: what to target at my next picks, and who'll be gone by then
+  if(S.engine==="mcts" && S.draftPlan && S.draftPlan.length){
+    const nm=c=>{const p=BY[c];return p?p.name.split(" ").slice(-1)[0]:c;};
+    const box=el("div",{class:"advice",style:"margin-top:10px"});
+    box.appendChild(el("div",{class:"advice-h",text:"Your draft plan (assuming rivals pick)"}));
+    S.draftPlan.forEach(rd=>{
+      const line=el("div",{class:"tiny",style:"margin-bottom:5px"});
+      line.appendChild(el("b",{text:`Pick #${rd.pickNo} (R${rd.round}): `}));
+      line.appendChild(document.createTextNode(rd.target?("target "+nm(rd.target)):"—"));
+      if(rd.alt&&rd.alt.length) line.appendChild(el("span",{class:"muted",text:" · also "+rd.alt.map(nm).join(", ")}));
+      box.appendChild(line);
+      if(rd.gone&&rd.gone.length) box.appendChild(el("div",{class:"tiny muted",style:"margin:-2px 0 6px 0;color:var(--crit)",text:"likely gone by then: "+rd.gone.map(nm).join(", ")}));
+    });
+    host.appendChild(box);
+  }
 }
 function engNote(){ const n=$("#engnote"); if(!n)return; n.innerHTML=S.engine==="greedy"
   ? `<b>Value engine.</b> The exact squad optimiser — each number is the fantasy points per round this player adds to your best finished squad, over his replacement. Instant.`

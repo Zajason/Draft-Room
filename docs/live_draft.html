@@ -488,6 +488,76 @@ function remainingOrder(needsPerTeam,mySeat,nTeams){
   return order;
 }
 
+/* ---- rollout draft planner --------------------------------------------------------
+   A snake draft is a sequence: I pick, rivals pick, it comes back to me. The value of a
+   pick is the squad it leads to AFTER rivals have taken their share. This runs the whole
+   snake to completion many times: for THIS pick it forces each candidate and averages the
+   final squad it yields (so a scarce-position star is worth more than a deep-position one);
+   for the PLAN it follows the recommended line and reports, at each of my upcoming picks,
+   who is likely still there, who to target, and who will be gone. Converges with `sims`,
+   and the snake order (your slot + team count) genuinely drives it. */
+function draftPlan(players,mineCodes,takenSet,rules,nTeams,mySeat,sims,caps){
+  caps=caps||[rules.slots.G,rules.slots.F,rules.slots.C,0];
+  const uni=makeUni(players);
+  const codeIx={};players.forEach((p,i)=>codeIx[p.code]=i);
+  const tmpl=caps.slice();
+  const baseNeeds=[];for(let s=0;s<nTeams;s++)baseNeeds.push(tmpl.slice());
+  const baseAvail=new Uint8Array(uni.n).fill(1);
+  const myPicks0=[];
+  mineCodes.forEach(c=>{const i=codeIx[c];if(i==null)return;baseAvail[i]=0;baseNeeds[mySeat][uni.pos[i]]--;myPicks0.push(i);});
+  let seat=0;const opp=[];for(let s=0;s<nTeams;s++)if(s!==mySeat)opp.push(s);
+  const takenArr=Array.from(takenSet);
+  takenArr.forEach(c=>{const i=codeIx[c];if(i==null||baseAvail[i]===0)return;baseAvail[i]=0;const pi=uni.pos[i];
+    for(let t=0;t<opp.length;t++){const s=opp[(seat+t)%opp.length];if(baseNeeds[s][pi]>0){baseNeeds[s][pi]--;seat=(seat+t+1)%opp.length;break;}}});
+  // True snake order for the whole draft, sliced to start at my next pick — so the gap to
+  // my following picks reflects my slot (slot 1 waits the whole round; the turn seat picks
+  // back-to-back).  Everything before my next pick is assumed already off the board.
+  const totalRounds=tmpl[0]+tmpl[1]+tmpl[2];
+  const snake=[];for(let r=0;r<totalRounds;r++)for(let s=0;s<nTeams;s++)snake.push(r%2===0?s:(nTeams-1-s));
+  const myGlobal=[];snake.forEach((s,g)=>{if(s===mySeat)myGlobal.push(g);});
+  const g0=myGlobal[Math.min(mineCodes.length,myGlobal.length-1)];
+  const order=snake.slice(g0);
+  const budgetU=Math.round((rules.budget||0)/CSTEP);
+  const myTurns=[];order.forEach((s,k)=>{if(s===mySeat)myTurns.push(k);});
+  if(!myTurns.length)return {now:[],rounds:[]};
+  const rng=mulberry32(97531);
+  const mkState=()=>({needs:baseNeeds.map(a=>a.slice()),avail:baseAvail.slice(),ptr:0,budgetU,
+    spent:new Int32Array(nTeams),mySeat,mine:myPicks0.slice(),order});
+  const myGreedy=(st)=>{const c=candIdx(uni,st,mySeat);let bi=-1,bf=-1e9;for(const i of c)if(uni.fp[i]>bf){bf=uni.fp[i];bi=i;}return bi;};
+  function rollout(forceFirst,record){
+    const st=mkState();let mt=0;const picks=[];const snap=record?[]:null;
+    while(st.ptr<order.length){const s=order[st.ptr];
+      if(s===mySeat){if(record)snap.push(st.avail.slice());
+        let pk=(mt===0&&forceFirst!=null&&st.avail[forceFirst]&&st.needs[mySeat][uni.pos[forceFirst]]>0)?forceFirst:myGreedy(st);
+        if(pk<0){st.ptr++;continue;}applyPick(uni,st,mySeat,pk);picks.push(pk);mt++;
+      } else {const i=heurPick(uni,st,s,rng,0.7);if(i<0){st.ptr++;continue;}applyPick(uni,st,s,i);}
+    }
+    return {value:squadVal(uni,st.mine,rules),picks,snap};
+  }
+  // Phase A — rank this pick by the squad each candidate leads to.
+  const nowCand=candIdx(uni,mkState(),mySeat).sort((a,b)=>uni.fp[b]-uni.fp[a]).slice(0,16);
+  const R=Math.max(15,Math.floor(sims/Math.max(1,nowCand.length)));
+  const now=nowCand.map(c=>{let s=0;for(let r=0;r<R;r++)s+=rollout(c,false).value;
+    return {code:players[c].code,idx:c,metric:s/R,proj:uni.fp[c]};}).sort((a,b)=>b.metric-a.metric);
+  // Phase B — plan: follow the greedy line, tally availability + my picks at each future turn.
+  const pickCount=myTurns.map(()=>({})),availCount=myTurns.map(()=>({}));
+  for(let r=0;r<sims;r++){const ro=rollout(null,true);
+    ro.picks.forEach((idx,t)=>{if(t<myTurns.length)pickCount[t][idx]=(pickCount[t][idx]||0)+1;});
+    ro.snap.forEach((av,t)=>{if(t>=myTurns.length)return;const c=availCount[t];for(let i=0;i<uni.n;i++)if(av[i])c[i]=(c[i]||0)+1;});
+  }
+  const rounds=[];
+  for(let t=1;t<Math.min(myTurns.length,4);t++){const pk=pickCount[t],av=availCount[t];
+    const pa=c=>(av[c]||0)/sims;   // probability the player is still available at this pick
+    // realistic targets: players I take who are usually still there when it's my turn
+    const byPick=Object.keys(pk).map(Number).filter(c=>pa(c)>=0.4).sort((a,b)=>pk[b]-pk[a]);
+    const target=byPick.length?players[byPick[0]].code:null;
+    const alt=byPick.slice(1,4).map(i=>players[i].code);
+    const gone=nowCand.filter(c=>pa(c)<0.35).sort((a,b)=>uni.fp[b]-uni.fp[a]).slice(0,4).map(i=>players[i].code);
+    rounds.push({pickNo:g0+myTurns[t]+1,round:t+1,target,alt,gone});
+  }
+  return {now,rounds};
+}
+
 function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,caps){
   caps=caps||[rules.slots.G,rules.slots.F,rules.slots.C,1];
   const uni=makeUni(players);
@@ -1014,8 +1084,10 @@ function computeDraftRec(){
     res.rows.forEach(r=>{const p=pool[r.i]; if(p.mandatory)return; if(nd[p.pos]<=0)return; if(r.vorp==null)return; rows.push({code:p.code,metric:r.vorp});});
     rows.sort((a,b)=>b.metric-a.metric); S.rec=rows; renderRec(); renderBoard();
   } else { S.computing=true; renderRec();
-    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(30,Math.min(600,+$("#sims").value||140));
-      const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0})); S.rec=mctsRecommend(players,BY,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
+    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(50,Math.min(6000,+$("#sims").value||400));
+      const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0}));
+      const plan=draftPlan(players,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
+      S.rec=plan.now; S.draftPlan=plan.rounds;
     }catch(e){console.error(e);S.rec=[];} S.computing=false; renderRec(); renderBoard(); },30); }
 }
 function renderDraftPanel(){
@@ -1043,7 +1115,7 @@ function renderDraftPanel(){
   const setrow=el("div",{class:"setrow"+(S.engine==="mcts"?"":" hide"),id:"mcts-set"});
   setrow.appendChild(el("label",{},[el("span",{text:"Teams"}),el("input",{type:"number",id:"nteams",min:"2",max:"16",value:"8",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
   setrow.appendChild(el("label",{},[el("span",{text:"My slot"}),el("input",{type:"number",id:"myslot",min:"1",max:"16",value:"1",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
-  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"30",max:"600",step:"10",value:"140",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
+  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"50",max:"6000",step:"100",value:"600",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
   rec.appendChild(setrow); rec.appendChild(el("div",{id:"rec"}));
   const rb=el("div",{class:"rowbtns"}); rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Undo last",onclick:undo}));
   rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Reset",onclick:()=>{S.mine=[];S.taken=new Set();S.history=[];refresh();}})); rec.appendChild(rb);
@@ -1053,14 +1125,29 @@ function renderRec(){ const host=$("#rec"); if(!host)return; host.innerHTML="";
   if(!draftNeeded()){ host.appendChild(el("div",{class:"note",text:"Your squad is complete — 10 players."})); return; }
   if(S.computing){ host.appendChild(el("div",{class:"recrow"},[el("span",{class:"rk",html:'<span class="spin"></span>'}),el("div",{class:"nm"},[el("b",{text:"Searching drafts…"}),el("span",{text:"running the lookahead"})]),el("span",{})])); return; }
   if(!S.rec.length){ host.appendChild(el("div",{class:"tiny muted",text:"No legal pick fits your budget and slots."})); return; }
-  const list=el("div",{class:"reclist"}), label=S.engine==="mcts"?"visits":"pts added";
+  const list=el("div",{class:"reclist"}), label=S.engine==="mcts"?"squad EV":"pts added";
   S.rec.slice(0,7).forEach((r,i)=>{const p=BY[r.code];
     const row=el("div",{class:"recrow"+(i===0?" top":""),style:"grid-template-columns:22px 30px 1fr auto",onclick:()=>draftMine(r.code)});
     row.appendChild(el("span",{class:"rk",text:String(i+1)})); row.appendChild(avatar(p,30));
-    row.appendChild(el("div",{class:"nm"},[el("b",{text:p.name}),el("span",{html:`<span class="pos ${p.pos}" style="width:14px;height:14px;font-size:8px;vertical-align:-2px">${p.pos}</span> ${p.club||""} · ${n1(p.price)}cr · proj ${n1(p.fp)}`})]));
-    const sc=el("div",{class:"sc"}); sc.appendChild(el("b",{text:S.engine==="mcts"?String(r.metric):(r.metric>=0?"+":"")+n2(r.metric)})); sc.appendChild(el("span",{text:label}));
+    row.appendChild(el("div",{class:"nm"},[el("b",{text:p.name}),el("span",{html:`<span class="pos ${p.pos}" style="width:14px;height:14px;font-size:8px;vertical-align:-2px">${p.pos}</span> ${p.club||""} · proj ${n1(p.fp)}`})]));
+    const sc=el("div",{class:"sc"}); sc.appendChild(el("b",{text:S.engine==="mcts"?n1(r.metric):(r.metric>=0?"+":"")+n2(r.metric)})); sc.appendChild(el("span",{text:label}));
     row.appendChild(sc); list.appendChild(row);});
   host.appendChild(list);
+  // multi-round plan: what to target at my next picks, and who'll be gone by then
+  if(S.engine==="mcts" && S.draftPlan && S.draftPlan.length){
+    const nm=c=>{const p=BY[c];return p?p.name.split(" ").slice(-1)[0]:c;};
+    const box=el("div",{class:"advice",style:"margin-top:10px"});
+    box.appendChild(el("div",{class:"advice-h",text:"Your draft plan (assuming rivals pick)"}));
+    S.draftPlan.forEach(rd=>{
+      const line=el("div",{class:"tiny",style:"margin-bottom:5px"});
+      line.appendChild(el("b",{text:`Pick #${rd.pickNo} (R${rd.round}): `}));
+      line.appendChild(document.createTextNode(rd.target?("target "+nm(rd.target)):"—"));
+      if(rd.alt&&rd.alt.length) line.appendChild(el("span",{class:"muted",text:" · also "+rd.alt.map(nm).join(", ")}));
+      box.appendChild(line);
+      if(rd.gone&&rd.gone.length) box.appendChild(el("div",{class:"tiny muted",style:"margin:-2px 0 6px 0;color:var(--crit)",text:"likely gone by then: "+rd.gone.map(nm).join(", ")}));
+    });
+    host.appendChild(box);
+  }
 }
 function engNote(){ const n=$("#engnote"); if(!n)return; n.innerHTML=S.engine==="greedy"
   ? `<b>Value engine.</b> The exact squad optimiser — each number is the fantasy points per round this player adds to your best finished squad, over his replacement. Instant.`

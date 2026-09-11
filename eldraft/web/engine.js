@@ -291,6 +291,76 @@ function remainingOrder(needsPerTeam,mySeat,nTeams){
   return order;
 }
 
+/* ---- rollout draft planner --------------------------------------------------------
+   A snake draft is a sequence: I pick, rivals pick, it comes back to me. The value of a
+   pick is the squad it leads to AFTER rivals have taken their share. This runs the whole
+   snake to completion many times: for THIS pick it forces each candidate and averages the
+   final squad it yields (so a scarce-position star is worth more than a deep-position one);
+   for the PLAN it follows the recommended line and reports, at each of my upcoming picks,
+   who is likely still there, who to target, and who will be gone. Converges with `sims`,
+   and the snake order (your slot + team count) genuinely drives it. */
+function draftPlan(players,mineCodes,takenSet,rules,nTeams,mySeat,sims,caps){
+  caps=caps||[rules.slots.G,rules.slots.F,rules.slots.C,0];
+  const uni=makeUni(players);
+  const codeIx={};players.forEach((p,i)=>codeIx[p.code]=i);
+  const tmpl=caps.slice();
+  const baseNeeds=[];for(let s=0;s<nTeams;s++)baseNeeds.push(tmpl.slice());
+  const baseAvail=new Uint8Array(uni.n).fill(1);
+  const myPicks0=[];
+  mineCodes.forEach(c=>{const i=codeIx[c];if(i==null)return;baseAvail[i]=0;baseNeeds[mySeat][uni.pos[i]]--;myPicks0.push(i);});
+  let seat=0;const opp=[];for(let s=0;s<nTeams;s++)if(s!==mySeat)opp.push(s);
+  const takenArr=Array.from(takenSet);
+  takenArr.forEach(c=>{const i=codeIx[c];if(i==null||baseAvail[i]===0)return;baseAvail[i]=0;const pi=uni.pos[i];
+    for(let t=0;t<opp.length;t++){const s=opp[(seat+t)%opp.length];if(baseNeeds[s][pi]>0){baseNeeds[s][pi]--;seat=(seat+t+1)%opp.length;break;}}});
+  // True snake order for the whole draft, sliced to start at my next pick — so the gap to
+  // my following picks reflects my slot (slot 1 waits the whole round; the turn seat picks
+  // back-to-back).  Everything before my next pick is assumed already off the board.
+  const totalRounds=tmpl[0]+tmpl[1]+tmpl[2];
+  const snake=[];for(let r=0;r<totalRounds;r++)for(let s=0;s<nTeams;s++)snake.push(r%2===0?s:(nTeams-1-s));
+  const myGlobal=[];snake.forEach((s,g)=>{if(s===mySeat)myGlobal.push(g);});
+  const g0=myGlobal[Math.min(mineCodes.length,myGlobal.length-1)];
+  const order=snake.slice(g0);
+  const budgetU=Math.round((rules.budget||0)/CSTEP);
+  const myTurns=[];order.forEach((s,k)=>{if(s===mySeat)myTurns.push(k);});
+  if(!myTurns.length)return {now:[],rounds:[]};
+  const rng=mulberry32(97531);
+  const mkState=()=>({needs:baseNeeds.map(a=>a.slice()),avail:baseAvail.slice(),ptr:0,budgetU,
+    spent:new Int32Array(nTeams),mySeat,mine:myPicks0.slice(),order});
+  const myGreedy=(st)=>{const c=candIdx(uni,st,mySeat);let bi=-1,bf=-1e9;for(const i of c)if(uni.fp[i]>bf){bf=uni.fp[i];bi=i;}return bi;};
+  function rollout(forceFirst,record){
+    const st=mkState();let mt=0;const picks=[];const snap=record?[]:null;
+    while(st.ptr<order.length){const s=order[st.ptr];
+      if(s===mySeat){if(record)snap.push(st.avail.slice());
+        let pk=(mt===0&&forceFirst!=null&&st.avail[forceFirst]&&st.needs[mySeat][uni.pos[forceFirst]]>0)?forceFirst:myGreedy(st);
+        if(pk<0){st.ptr++;continue;}applyPick(uni,st,mySeat,pk);picks.push(pk);mt++;
+      } else {const i=heurPick(uni,st,s,rng,0.7);if(i<0){st.ptr++;continue;}applyPick(uni,st,s,i);}
+    }
+    return {value:squadVal(uni,st.mine,rules),picks,snap};
+  }
+  // Phase A — rank this pick by the squad each candidate leads to.
+  const nowCand=candIdx(uni,mkState(),mySeat).sort((a,b)=>uni.fp[b]-uni.fp[a]).slice(0,16);
+  const R=Math.max(15,Math.floor(sims/Math.max(1,nowCand.length)));
+  const now=nowCand.map(c=>{let s=0;for(let r=0;r<R;r++)s+=rollout(c,false).value;
+    return {code:players[c].code,idx:c,metric:s/R,proj:uni.fp[c]};}).sort((a,b)=>b.metric-a.metric);
+  // Phase B — plan: follow the greedy line, tally availability + my picks at each future turn.
+  const pickCount=myTurns.map(()=>({})),availCount=myTurns.map(()=>({}));
+  for(let r=0;r<sims;r++){const ro=rollout(null,true);
+    ro.picks.forEach((idx,t)=>{if(t<myTurns.length)pickCount[t][idx]=(pickCount[t][idx]||0)+1;});
+    ro.snap.forEach((av,t)=>{if(t>=myTurns.length)return;const c=availCount[t];for(let i=0;i<uni.n;i++)if(av[i])c[i]=(c[i]||0)+1;});
+  }
+  const rounds=[];
+  for(let t=1;t<Math.min(myTurns.length,4);t++){const pk=pickCount[t],av=availCount[t];
+    const pa=c=>(av[c]||0)/sims;   // probability the player is still available at this pick
+    // realistic targets: players I take who are usually still there when it's my turn
+    const byPick=Object.keys(pk).map(Number).filter(c=>pa(c)>=0.4).sort((a,b)=>pk[b]-pk[a]);
+    const target=byPick.length?players[byPick[0]].code:null;
+    const alt=byPick.slice(1,4).map(i=>players[i].code);
+    const gone=nowCand.filter(c=>pa(c)<0.35).sort((a,b)=>uni.fp[b]-uni.fp[a]).slice(0,4).map(i=>players[i].code);
+    rounds.push({pickNo:g0+myTurns[t]+1,round:t+1,target,alt,gone});
+  }
+  return {now,rounds};
+}
+
 function mctsRecommend(players,BY,mineCodes,takenSet,rules,nTeams,mySeat,sims,caps){
   caps=caps||[rules.slots.G,rules.slots.F,rules.slots.C,1];
   const uni=makeUni(players);
