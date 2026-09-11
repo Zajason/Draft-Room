@@ -106,6 +106,7 @@ DUR_FLOOR = 0.40
 # comes in below his proven same-club minutes, pull it back up (then the club is re-
 # normalised, so the lift comes out of the churn around him - which is the honest trade).
 STABILITY_W_MAX = 0.6      # most of the way back to proven minutes for a rock-stable role
+MOVER_TRUST = 0.5          # a proven starter who changed clubs is trusted, but less (new role)
 
 # Width of the projection's own uncertainty, as a coefficient of variation: a floor for
 # a player we know well, plus a term that grows as the sample thins.  Calibrated so that
@@ -306,9 +307,13 @@ def _raw_minute_prior(p: dict, priors: Dict[str, Tuple[float, float]], hz: Horiz
     k = WEIGHTS.shrink_games_k
     shrunk = (wsum * raw + k * prior_mpg * 0.7) / (wsum + k)
 
-    # A player joining a new club has a less certain role; pull him toward the mean.
+    # A player joining a new club has a less certain role; pull him toward the mean - but
+    # much less for an established high-minute veteran, whose proven workload travels with
+    # him (he was signed to keep playing), than for a young or fringe mover we must guess at.
     if p.get("new_to_team"):
-        shrunk = 0.82 * shrunk + 0.18 * prior_mpg
+        trust = _career_minute_stability(p, hz)
+        pull = 0.18 * (1.0 - trust)
+        shrunk = (1.0 - pull) * shrunk + pull * prior_mpg
     # Ageing bigs and guards lose rotation minutes faster than they lose efficiency.
     if p.get("age") and p["age"] > 33:
         shrunk *= max(0.72, 1.0 - 0.045 * (p["age"] - 33))
@@ -347,22 +352,61 @@ def _same_club_el_minutes(p: dict, hz: Horizon) -> List[Tuple[float, float, floa
     return rows
 
 
+def _career_el_minutes(p: dict, hz: Horizon) -> List[Tuple[float, float, float]]:
+    """(mpg, gp, recency weight) for every EuroLeague season, regardless of club."""
+    decay = WEIGHTS.season_decay
+    rows = []
+    for i, s in enumerate(hz.el):
+        b = (p.get("el") or {}).get(s)
+        if b and b.get("min", 0) > 0 and b.get("mpg"):
+            rows.append((float(b["mpg"]), float(b.get("gp", 0)), decay[min(i, len(decay) - 1)]))
+    return rows
+
+
 def _proven_minutes(p: dict, hz: Horizon) -> float:
-    """Recency-weighted minutes-per-appearance the player has actually held at his club."""
-    rows = _same_club_el_minutes(p, hz)
+    """Recency-weighted minutes the player has held - at this club, or his career if a mover."""
+    rows = _same_club_el_minutes(p, hz) or _career_el_minutes(p, hz)
     wsum = sum(w for _, _, w in rows)
     return sum(m * w for m, _, w in rows) / wsum if wsum else 0.0
 
 
-def _role_stability(p: dict, hz: Horizon) -> float:
-    """0..STABILITY_W_MAX: how much to trust a player's proven same-club minutes.
+def _career_minute_stability(p: dict, hz: Horizon) -> float:
+    """0..1: how proven and consistent a player's minutes are across his EuroLeague career.
 
-    High only when he has several EuroLeague seasons at THIS club, a consistent workload
-    across them, and a real rotation role - i.e. a proven starter, not a fringe piece or a
-    newcomer whose minutes the model genuinely has to guess at.
+    Unlike _role_stability this ignores which club he was at - it measures whether he is an
+    established high-minute player whose role travels, so a mover like Mike James (three
+    straight ~30-mpg seasons) is not dampened toward the positional mean as if his workload
+    were a guess.
+    """
+    decay = WEIGHTS.season_decay
+    rows = []
+    for i, s in enumerate(hz.el):
+        b = (p.get("el") or {}).get(s)
+        if b and b.get("min", 0) > 0 and b.get("mpg"):
+            rows.append((float(b["mpg"]), decay[min(i, len(decay) - 1)]))
+    if len(rows) < 2:
+        return 0.0
+    mpgs = [m for m, _ in rows]
+    mean = sum(mpgs) / len(mpgs)
+    if mean <= 0:
+        return 0.0
+    var = sum((m - mean) ** 2 for m in mpgs) / len(mpgs)
+    cv = (var ** 0.5) / mean
+    consistency = max(0.0, min(1.0, 1.0 - cv / 0.30))
+    tenure = min(1.0, (len(rows) - 1) / 2.0)
+    established = max(0.0, min(1.0, (mean - 14.0) / 12.0))   # a real high-minute role
+    return consistency * tenure * established
+
+
+def _role_stability(p: dict, hz: Horizon) -> float:
+    """0..STABILITY_W_MAX: how much to trust a player's proven minutes over the re-allocation.
+
+    Highest for a proven starter staying put (several consistent, high-minute seasons at
+    THIS club).  A proven starter who changed clubs keeps a reduced share of that trust
+    (MOVER_TRUST): his workload travels with him, but his exact new role is less certain.
     """
     if p.get("new_to_team"):
-        return 0.0
+        return STABILITY_W_MAX * MOVER_TRUST * _career_minute_stability(p, hz)
     rows = _same_club_el_minutes(p, hz)
     if len(rows) < 2:
         return 0.0
