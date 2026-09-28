@@ -1,6 +1,11 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>EuroLeague Draft Room</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0C1014">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")){addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
 <style>
 :root{color-scheme:dark}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0C1014;color:#E8EDF3;
@@ -25,5 +30,5 @@ a.card span{color:#9BA7B4;font-size:13px}
 <a class="card" href="dashboard.html"><b>Scout &amp; Analysis →</b><span>Projections, scouting radars, club depth charts, and three backtests.</span></a>
 <a class="card" href="live_draft.html"><b>Squad Room →</b><span>Weekly transfer optimiser and the live draft board, with two engines.</span></a>
 </div>
-<p class="foot">Built with public EuroLeague feeds. <a href="https://github.com/Zajason/Draft-Room">Source &amp; write-up on GitHub</a>.</p>
+<p class="foot">Runs entirely in your browser — no install or server needed. Open the Squad Room and use your browser's <b>Install app</b> (the ⤓ button, or the address-bar install icon) to keep it on your dock and use it offline. Your teams and drafts are saved on this device.<br><a href="https://github.com/Zajason/Draft-Room">Source &amp; write-up on GitHub</a>.</p>
 </div></body></html>

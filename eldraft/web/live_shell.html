@@ -1,5 +1,16 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>EuroLeague Squad Room</title>
+<!-- installable app (PWA): works offline, opens in its own window -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0C1014">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Squad Room">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")){addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -171,6 +182,7 @@ tbody tr.rec td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
     <div class="hstat"><span class="hide"></span></div>
     <div id="hstats" style="display:flex;gap:18px;align-items:flex-end"></div>
     <a class="scoutlink" id="scoutlink" href="#" target="_blank" rel="noopener">↗ Scout &amp; projections</a>
+    <button class="themebtn" id="install" type="button" hidden>⤓ Install app</button>
     <button class="themebtn" id="theme" type="button">Theme</button>
   </div>
   <div class="modetabs" id="modetabs" role="tablist">

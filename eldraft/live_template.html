@@ -1,5 +1,16 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>EuroLeague Squad Room</title>
+<!-- installable app (PWA): works offline, opens in its own window -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0C1014">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Squad Room">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")){addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -171,6 +182,7 @@ tbody tr.rec td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
     <div class="hstat"><span class="hide"></span></div>
     <div id="hstats" style="display:flex;gap:18px;align-items:flex-end"></div>
     <a class="scoutlink" id="scoutlink" href="#" target="_blank" rel="noopener">↗ Scout &amp; projections</a>
+    <button class="themebtn" id="install" type="button" hidden>⤓ Install app</button>
     <button class="themebtn" id="theme" type="button">Theme</button>
   </div>
   <div class="modetabs" id="modetabs" role="tablist">
@@ -816,7 +828,24 @@ function removeFromTeam(code){ const t=curTeam(); if(t){t.squad=t.squad.filter(c
 const S={ mode:"weekly", q:"", pos:"ALL",
   wkRound:(WK&&WK.nextRound)||1, wkH:3, wkMaxT:4, thrift:"balanced", excluded:new Set(),
   plan:null, planT:null, computing:false,
-  mine:[], taken:new Set(), history:[], engine:"greedy", rec:[] };
+  mine:[], taken:new Set(), history:[], engine:"greedy", rec:[], draftPlan:[],
+  nteams:8, myslot:1, sims:600 };
+
+/* ---------- draft state: persistent (survives reload) ---------- */
+const LSKEY_DRAFT="elsr_draft_v1";
+function saveDraft(){ try{localStorage.setItem(LSKEY_DRAFT, JSON.stringify({
+  mine:S.mine, taken:[...S.taken], history:S.history, engine:S.engine, mode:S.mode,
+  nteams:S.nteams, myslot:S.myslot, sims:S.sims, wkRound:S.wkRound,
+  excluded:[...S.excluded] }));}catch(e){} }
+function loadDraft(){ try{const r=localStorage.getItem(LSKEY_DRAFT); if(!r)return; const d=JSON.parse(r)||{};
+  if(Array.isArray(d.mine))S.mine=d.mine.filter(c=>BY[c]);
+  if(Array.isArray(d.taken))S.taken=new Set(d.taken.filter(c=>BY[c]));
+  if(Array.isArray(d.history))S.history=d.history;
+  if(Array.isArray(d.excluded))S.excluded=new Set(d.excluded.filter(c=>BY[c]));
+  if(d.engine)S.engine=d.engine; if(d.mode)S.mode=d.mode;
+  if(d.nteams)S.nteams=d.nteams; if(d.myslot)S.myslot=d.myslot; if(d.sims)S.sims=d.sims;
+  if(d.wkRound)S.wkRound=d.wkRound;
+}catch(e){} }
 
 /* ---------- this-week valuation ---------- */
 function weekPts(codes,round){ const out=[]; let coach=0;
@@ -1008,7 +1037,7 @@ function renderTeamsPanel(){
   const plan=el("div",{class:"card pad"});
   plan.appendChild(el("div",{class:"sec-h"},[el("h2",{text:"Optimise the week"}),el("span",{class:"muted",text:"transfers ≤ "+S.wkMaxT})]));
   const ctl=el("div",{class:"setrow"});
-  const rsel=el("select",{onchange:e=>{S.wkRound=+e.target.value;S.plan=null;refresh();}});
+  const rsel=el("select",{onchange:e=>{S.wkRound=+e.target.value;S.plan=null;saveDraft();refresh();}});
   (WK?WK.rounds:[1]).forEach(r=>rsel.appendChild(el("option",{value:r,selected:r===S.wkRound?"":null,text:"Round "+r})));
   ctl.appendChild(el("label",{},[el("span",{text:"Round"}),rsel]));
   const hsel=el("select",{onchange:e=>{S.wkH=+e.target.value;S.plan=null;refresh();}});
@@ -1067,9 +1096,9 @@ function needs(){ const n={G:RULES.slots.G,F:RULES.slots.F,C:RULES.slots.C};
   S.mine.forEach(c=>{if(BY[c].pos!=="H")n[BY[c].pos]=Math.max(0,n[BY[c].pos]-1);}); return n; }
 function draftSpent(){ return S.mine.reduce((a,c)=>a+(BY[c].price||0),0); }
 function isAvail(c){ return !S.taken.has(c)&&!S.mine.includes(c); }
-function draftMine(code){ if(!isAvail(code))return; S.history.push({t:"mine",code}); S.mine.push(code); refresh(); }
-function markTaken(code){ if(!isAvail(code))return; S.history.push({t:"taken",code}); S.taken.add(code); refresh(); }
-function undo(){ const h=S.history.pop(); if(!h)return; if(h.t==="mine")S.mine=S.mine.filter(c=>c!==h.code); else S.taken.delete(h.code); refresh(); }
+function draftMine(code){ if(!isAvail(code))return; S.history.push({t:"mine",code}); S.mine.push(code); saveDraft(); refresh(); }
+function markTaken(code){ if(!isAvail(code))return; S.history.push({t:"taken",code}); S.taken.add(code); saveDraft(); refresh(); }
+function undo(){ const h=S.history.pop(); if(!h)return; if(h.t==="mine")S.mine=S.mine.filter(c=>c!==h.code); else S.taken.delete(h.code); saveDraft(); refresh(); }
 function draftPool(){ const pool=[]; ALL.forEach(p=>{ if(p.pos==="H")return;
   if(S.mine.includes(p.code))pool.push(Object.assign({},p,{mandatory:true})); else if(!S.taken.has(p.code))pool.push(p); }); return pool; }
 function draftNeeded(){ const nd=needs(); return nd.G+nd.F+nd.C>0; }
@@ -1084,7 +1113,7 @@ function computeDraftRec(){
     res.rows.forEach(r=>{const p=pool[r.i]; if(p.mandatory)return; if(nd[p.pos]<=0)return; if(r.vorp==null)return; rows.push({code:p.code,metric:r.vorp});});
     rows.sort((a,b)=>b.metric-a.metric); S.rec=rows; renderRec(); renderBoard();
   } else { S.computing=true; renderRec();
-    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,+$("#nteams").value||8)); const mySlot=Math.max(1,Math.min(nTeams,+$("#myslot").value||1))-1; const sims=Math.max(50,Math.min(6000,+$("#sims").value||400));
+    setTimeout(()=>{ try{ const nTeams=Math.max(2,Math.min(16,S.nteams||8)); const mySlot=Math.max(1,Math.min(nTeams,S.myslot||1))-1; const sims=Math.max(50,Math.min(6000,S.sims||600));
       const players=ALL.filter(p=>p.pos!=="H").map(p=>Object.assign({},p,{price:0}));
       const plan=draftPlan(players,S.mine,S.taken,{budget:0,slots:RULES.slots,full:RULES.full,bench:RULES.bench,captain:RULES.captain},nTeams,mySlot,sims,CAPS_DRAFT);
       S.rec=plan.now; S.draftPlan=plan.rounds;
@@ -1111,14 +1140,14 @@ function renderDraftPanel(){
   const et=el("div",{class:"engtabs",id:"engtabs"});
   et.appendChild(el("button",{class:"engtab","aria-pressed":String(S.engine==="greedy"),"data-eng":"greedy",type:"button",html:'Value engine<small>exact · instant</small>'}));
   et.appendChild(el("button",{class:"engtab","aria-pressed":String(S.engine==="mcts"),"data-eng":"mcts",type:"button",html:'Lookahead (MCTS)<small>models rivals</small>'}));
-  et.addEventListener("click",e=>{const x=e.target.closest(".engtab");if(!x)return;S.engine=x.dataset.eng;refresh();}); rec.appendChild(et);
+  et.addEventListener("click",e=>{const x=e.target.closest(".engtab");if(!x)return;S.engine=x.dataset.eng;saveDraft();refresh();}); rec.appendChild(et);
   const setrow=el("div",{class:"setrow"+(S.engine==="mcts"?"":" hide"),id:"mcts-set"});
-  setrow.appendChild(el("label",{},[el("span",{text:"Teams"}),el("input",{type:"number",id:"nteams",min:"2",max:"16",value:"8",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
-  setrow.appendChild(el("label",{},[el("span",{text:"My slot"}),el("input",{type:"number",id:"myslot",min:"1",max:"16",value:"1",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
-  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"50",max:"6000",step:"100",value:"600",onchange:()=>{if(S.engine==="mcts")computeDraftRec();}})]));
+  setrow.appendChild(el("label",{},[el("span",{text:"Teams"}),el("input",{type:"number",id:"nteams",min:"2",max:"16",value:String(S.nteams),onchange:e=>{S.nteams=Math.max(2,Math.min(16,+e.target.value||8));saveDraft();if(S.engine==="mcts")computeDraftRec();}})]));
+  setrow.appendChild(el("label",{},[el("span",{text:"My slot"}),el("input",{type:"number",id:"myslot",min:"1",max:"16",value:String(S.myslot),onchange:e=>{S.myslot=Math.max(1,Math.min(16,+e.target.value||1));saveDraft();if(S.engine==="mcts")computeDraftRec();}})]));
+  setrow.appendChild(el("label",{},[el("span",{text:"Search"}),el("input",{type:"number",id:"sims",min:"50",max:"6000",step:"100",value:String(S.sims),onchange:e=>{S.sims=Math.max(50,Math.min(6000,+e.target.value||600));saveDraft();if(S.engine==="mcts")computeDraftRec();}})]));
   rec.appendChild(setrow); rec.appendChild(el("div",{id:"rec"}));
   const rb=el("div",{class:"rowbtns"}); rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Undo last",onclick:undo}));
-  rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Reset",onclick:()=>{S.mine=[];S.taken=new Set();S.history=[];refresh();}})); rec.appendChild(rb);
+  rb.appendChild(el("button",{class:"btn ghost",type:"button",text:"Reset",onclick:()=>{if(!confirm("Clear this draft?"))return;S.mine=[];S.taken=new Set();S.history=[];saveDraft();refresh();}})); rec.appendChild(rb);
   rec.appendChild(el("div",{class:"note",id:"engnote"})); host.appendChild(rec); renderRec(); engNote();
 }
 function renderRec(){ const host=$("#rec"); if(!host)return; host.innerHTML="";
@@ -1196,7 +1225,7 @@ function renderBoard(){
     if(S.mode==="weekly"){ const w=el("div",{class:"acts"});
       if(owned){ w.appendChild(el("button",{class:"mini",type:"button",title:"Remove from team",text:"Remove",onclick:e=>{e.stopPropagation();removeFromTeam(p.code);}})); }
       else { const ok=t&&canAdd(t,p.code); w.appendChild(el("button",{class:"mini mine",type:"button",title:ok?"Add to team":"No slot / over budget",text:"+ Add",disabled:ok?null:"",style:ok?"":"opacity:.4;cursor:default",onclick:e=>{e.stopPropagation();if(ok)addToTeam(p.code);}})); }
-      w.appendChild(el("button",{class:"mini take"+(excl?" on":""),type:"button",title:"Injured / unavailable",text:excl?"Out":"Injury",onclick:e=>{e.stopPropagation();if(excl)S.excluded.delete(p.code);else S.excluded.add(p.code);S.plan=null;refresh();}}));
+      w.appendChild(el("button",{class:"mini take"+(excl?" on":""),type:"button",title:"Injured / unavailable",text:excl?"Out":"Injury",onclick:e=>{e.stopPropagation();if(excl)S.excluded.delete(p.code);else S.excluded.add(p.code);S.plan=null;saveDraft();refresh();}}));
       act.appendChild(w);
     } else if(gone){ act.appendChild(el("span",{class:"tiny muted",text:S.mine.includes(p.code)?"yours":"taken"})); }
     else { const w=el("div",{class:"acts"}); w.appendChild(el("button",{class:"mini mine",type:"button",text:"+ Mine",onclick:e=>{e.stopPropagation();draftMine(p.code);}}));
@@ -1217,7 +1246,7 @@ function renderHeader(){
     [[String(S.mine.length),"Picked"],[String(nd.G+nd.F+nd.C),"To pick"],[weekPtsDraft(),"Proj"]].forEach(s=>h.appendChild(el("div",{class:"hstat"},[el("b",{text:s[0]}),el("span",{text:s[1]})]))); }
 }
 function weekPtsDraft(){ const out=S.mine.map(c=>BY[c].fp).sort((a,b)=>b-a); const k=RULES.full; let v=out.slice(0,k).reduce((a,b)=>a+b,0)+RULES.bench*out.slice(k).reduce((a,b)=>a+b,0); if(out.length)v+=(RULES.captain-1)*out[0]; return v.toFixed(0); }
-function setMode(m){ S.mode=m; sortK=m==="weekly"?"_wkfp":"fp"; sortDir=-1;
+function setMode(m){ S.mode=m; saveDraft(); sortK=m==="weekly"?"_wkfp":"fp"; sortDir=-1;
   [...$("#modetabs").children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.mode===m)));
   const ch=[...$("#posf").children].find(c=>c.dataset.v==="H"); if(ch)ch.classList.toggle("hide",m==="draft");
   if(m==="draft"&&S.pos==="H"){S.pos="ALL";[...$("#posf").children].forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v==="ALL")));}
@@ -1229,7 +1258,7 @@ function refreshPriceHint(){ var h=$("#pricehint"); if(!h)return; var n=Object.k
   var r=$("#resetprices"); if(r) r.addEventListener("click",function(e){e.preventDefault();resetPrices();}); }
 function refresh(){ renderHeader(); refreshPriceHint(); if(S.mode==="weekly")renderTeamsPanel(); else renderDraftPanel(); if(S.mode==="draft")computeDraftRec(); }
 function boot(){
-  loadTeams(); loadPrices(); loadRoles();
+  loadTeams(); loadPrices(); loadRoles(); loadDraft();
   if(SCOUT_URL&&SCOUT_URL.indexOf("http")===0)$("#scoutlink").href=SCOUT_URL; else $("#scoutlink").classList.add("hide");
   $("#modetabs").addEventListener("click",e=>{const t=e.target.closest(".modetab");if(t)setMode(t.dataset.mode);});
   const pf=$("#posf"); [["ALL","All"],["G","G"],["F","F"],["C","C"],["H","Coach"]].forEach(([v,l])=>
@@ -1238,11 +1267,16 @@ function boot(){
   var ctrls=document.querySelector(".controls");
   if(ctrls){ var hint=el("span",{class:"pricehint",id:"pricehint"}); ctrls.appendChild(hint); refreshPriceHint(); }
   $("#theme").addEventListener("click",()=>{const cur=document.documentElement.getAttribute("data-theme");const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",dark?"light":"dark");refresh();});
+  // Install-as-app (PWA): show the button when the browser says the app is installable.
+  var deferredInstall=null, ib=$("#install");
+  addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstall=e;if(ib)ib.hidden=false;});
+  addEventListener("appinstalled",function(){if(ib)ib.hidden=true;deferredInstall=null;});
+  if(ib)ib.addEventListener("click",async function(){if(!deferredInstall)return;deferredInstall.prompt();try{await deferredInstall.userChoice;}catch(e){}deferredInstall=null;ib.hidden=true;});
   var params = new URLSearchParams(location.search);
   var demo = params.get("demo") || (location.hash||"").replace(/^#/, "");
   if (demo === "weekly") { demoWeekly(); }
   else if (demo === "draft") { demoDraft(); }
-  else { setMode("weekly"); }
+  else { setMode(S.mode||"weekly"); }   // reopen where you left off
 }
 function demoWeekly(){
   try{ localStorage.removeItem(LSKEY); }catch(e){}
