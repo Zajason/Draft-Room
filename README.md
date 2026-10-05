@@ -31,7 +31,7 @@ Nothing is hand-entered — the whole pipeline runs from public feeds. And every
 | **Squad Room — Weekly** | Save your team; each week the engine picks the ≤4 transfers to make, matchup- and injury-aware, over a multi-round horizon. |
 | **Squad Room — Draft** | A live draft board: click players off the board, get your next pick from an exact value engine or an MCTS lookahead. |
 
-> **Live demo:** the self-contained builds live in [`docs/`](docs/) — open `docs/dashboard.html` or `docs/live_draft.html` in any browser (they work offline), or enable GitHub Pages (Settings → Pages → *Deploy from branch* → `/docs`) for a hosted link.
+> **Live app:** **[zajason.github.io/Draft-Room](https://zajason.github.io/Draft-Room/)** — open the **[Squad Room](https://zajason.github.io/Draft-Room/live_draft.html)** (weekly + draft) or the **[Scout & Analysis dashboard](https://zajason.github.io/Draft-Room/dashboard.html)**. It runs entirely in your browser, installs as an app (⤓), works offline, saves your teams and drafts, and refreshes its data every week. The self-contained builds also live in [`docs/`](docs/) and open straight from disk.
 
 <table>
 <tr>
