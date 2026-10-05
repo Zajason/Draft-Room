@@ -1,0 +1,48 @@
+name: Weekly data update
+
+# Keeps the published app fresh: pulls the week's newly played games, re-projects every
+# player (current-season form blends in automatically), re-applies the official credit
+# prices, and rebuilds the Squad Room + dashboard into docs/ so GitHub Pages redeploys.
+#
+#  - runs automatically every Monday (after the Fri round)
+#  - can be run on demand from the Actions tab (workflow_dispatch)
+#  - also runs when you commit a fresh price export to data/players_stats.xlsx
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"      # Mondays 06:00 UTC
+  workflow_dispatch: {}
+  push:
+    paths:
+      - "data/players_stats.xlsx"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e .
+      - name: Refresh data and rebuild the app
+        run: python -m eldraft.cli refresh
+      - name: Commit and push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/live_draft.html docs/dashboard.html data/board.json data/prices_official.json
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git commit -m "Weekly data refresh: new games + prices [skip ci]"
+            git push
+          fi

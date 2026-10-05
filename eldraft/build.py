@@ -291,7 +291,9 @@ def build_universe(save: bool = True, target_season: str = None,
 
     el_seasons = {s: _collect_season(s) for s in el_history}
     ec_seasons = {s: _collect_season(s) for s in ec_history}
-    logs = {s: _collect_gamelogs(s) for s in gamelog_seasons}
+    # Pull the current season's box scores fresh so each week's new games feed form and
+    # variance; completed prior seasons are read from cache (they never change).
+    logs = {s: _collect_gamelogs(s, cache_only=(s != target_season)) for s in gamelog_seasons}
     nba_idx = _collect_nba(nba_history)
 
     el_name_idx = _season_name_index(el_seasons)

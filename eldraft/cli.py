@@ -143,7 +143,9 @@ def cmd_prices(args) -> int:
     board = load_board()
     report = P.import_prices(board, args.sheet)
     save_board(board)
+    n = P.save_official_prices(board)   # persist so weekly rebuilds keep the real prices
     print("official prices from {}".format(args.sheet))
+    print("  persisted {} prices to {}".format(n, P.PRICES_PATH))
     print("  priced {} players and {} coaches ({} rows in the export)".format(
         report["priced"], report["coaches_priced"], report["rows"]))
     left = report.get("unpriced_players", [])
@@ -157,6 +159,33 @@ def cmd_prices(args) -> int:
         from .live import build_live
         path = build_live(board, out_path=args.out)
         print("-> {} (Squad Room now uses the real credit values)".format(path))
+    return 0
+
+
+def cmd_refresh(args) -> int:
+    """One-shot weekly update: fetch latest games, re-project, re-price, rebuild the app."""
+    from . import prices as P
+    from .dashboard import build_dashboard
+    from .live import build_live
+    from .pipeline import apply_availability, apply_roster, build_board, save_board
+    print("fetching latest data and rebuilding projections (pulls newly played games)...")
+    board = build_board(rebuild=True)           # fresh fetch incl current season; re-applies saved prices
+    if args.sheet and os.path.exists(args.sheet):
+        rep = P.import_prices(board, args.sheet)
+        save_board(board)
+        n = P.save_official_prices(board)
+        print("  fresh official prices from {}: {} priced, {} persisted".format(
+            args.sheet, rep["priced"], n))
+    else:
+        print("  re-applied {} persisted official prices (drop a new export to update them)".format(
+            board["meta"].get("official_prices_applied", 0)))
+    apply_availability(board, None)
+    apply_roster(board, None)
+    print("-> {}".format(build_live(board, out_path=args.live)))
+    if not args.no_dashboard:
+        print("-> {}".format(build_dashboard(board, out_path=args.dashboard, sims=args.sims)))
+    print("done: {} players, {} coaches for {}".format(
+        len(board["players"]), len(board["coaches"]), board["meta"].get("target_season")))
     return 0
 
 
@@ -280,6 +309,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     lv.add_argument("--roster", help="players you already own")
     lv.add_argument("--out", default=os.path.join(OUT, "live_draft.html"))
     lv.set_defaults(fn=cmd_live)
+
+    rf = sub.add_parser("refresh", help="weekly update: fetch new games, re-project, re-price, rebuild the app")
+    rf.add_argument("--sheet", default=os.path.join("data", "players_stats.xlsx"),
+                    help="fresh price export to import if present (else keeps persisted prices)")
+    rf.add_argument("--live", default=os.path.join("docs", "live_draft.html"))
+    rf.add_argument("--dashboard", default=os.path.join("docs", "dashboard.html"))
+    rf.add_argument("--no-dashboard", action="store_true")
+    rf.add_argument("--sims", type=int, default=250)
+    rf.set_defaults(fn=cmd_refresh)
 
     pr = sub.add_parser("prices", help="bake the game's official credit values into the board")
     pr.add_argument("--sheet", required=True, help="the game's player-stats .xlsx export (has a Quotation column)")

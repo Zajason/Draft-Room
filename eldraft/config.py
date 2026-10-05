@@ -21,14 +21,18 @@ TARGET_SEASON = "E2026"
 
 # (season_code, weight_label) ordered newest -> oldest.  Recency weights are applied in
 # project.py; keeping the list here makes it trivial to extend the history window.
-EL_HISTORY: List[str] = ["E2025", "E2024", "E2023"]
+# The live/current season (E2026) is included so in-season form feeds the projection as
+# games are played; empirical-Bayes shrinkage keeps a tiny early-season sample from
+# dominating, and its weight grows naturally with every round.  (Backtests pass their own
+# history that ends before the season they score, so this does not leak there.)
+EL_HISTORY: List[str] = ["E2026", "E2025", "E2024", "E2023"]
 EC_HISTORY: List[str] = ["U2025", "U2024", "U2023"]
 
 # ESPN encodes an NBA season by its *ending* year: 2026 == the 2025-26 season.
 NBA_HISTORY: List[int] = [2026, 2025, 2024]
 
 # Season used for per-game box score logs (variance / consistency / form modelling).
-GAMELOG_SEASONS: List[str] = ["E2025"]
+GAMELOG_SEASONS: List[str] = ["E2026", "E2025"]
 
 # --------------------------------------------------------------------------------------
 # Endpoints
@@ -78,7 +82,7 @@ RULES = GameRules()
 @dataclass(frozen=True)
 class ModelWeights:
     # Recency decay applied to season n-back (index 0 == most recent completed season).
-    season_decay: Tuple[float, ...] = (1.0, 0.55, 0.28)
+    season_decay: Tuple[float, ...] = (1.0, 0.55, 0.28, 0.14)
 
     # How much a minute of competition X is worth relative to a EuroLeague minute, and
     # how much we trust the *rate* stats produced there.  EuroCup is a clear step down;

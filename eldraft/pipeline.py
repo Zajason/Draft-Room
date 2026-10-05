@@ -43,6 +43,10 @@ def build_board(rebuild: bool = False) -> dict:
         "coaches": coaches,
         "team_scores": {k: round(v, 2) for k, v in team_scores.items()},
     }
+    # Keep the real credit values across rebuilds: re-apply the last imported official
+    # prices (persisted by `eldraft prices`).  Modelled prices remain only as the fallback.
+    from . import prices as _prices
+    board["meta"]["official_prices_applied"] = _prices.apply_saved_prices(board)
     with open(BOARD_PATH, "w") as fh:
         json.dump(board, fh)
     return board

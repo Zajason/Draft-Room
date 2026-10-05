@@ -185,7 +185,15 @@ def season_boxscores(season_code: str, workers: int = 3,
     network, so the modelling pipeline never blocks on a slow or rate-limited feed.
     """
     games = season_games(season_code)
-    played = [g for g in games if g.get("played") or g.get("gameCode")]
+    # Only games that have actually tipped off have a box score; limiting to played/past
+    # fixtures avoids hundreds of empty requests for a season still in progress.
+    import datetime as _dt
+    _today = _dt.date.today().isoformat()
+
+    def _is_played(g):
+        d = str(g.get("date"))[:10] if g.get("date") else None
+        return bool(g.get("played")) or bool(g.get("winner")) or (d is not None and d <= _today)
+    played = [g for g in games if g.get("gameCode") and _is_played(g)]
     comp = season_code[0]
     reqs = [
         (

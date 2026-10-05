@@ -203,6 +203,31 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m eldraft.cli live         # writes out/live_draft.html (weekly + draft)
 ```
 
+## Keeping it current (weekly)
+
+The published app updates itself. A GitHub Action (`.github/workflows/weekly-update.yml`)
+runs every Monday — and on demand from the Actions tab — to pull the week's newly played
+games, re-project everyone (current-season form blends in as rounds are played), re-apply
+the official credit prices, and rebuild the pages into `docs/` so GitHub Pages redeploys.
+
+One command does the same locally:
+
+```bash
+./.venv/bin/python -m eldraft.cli refresh        # new games + re-price + rebuild docs/
+```
+
+Prices are the one thing that can't be fetched automatically (the game's price feed is
+login-gated). The last imported official prices are persisted to `data/prices_official.json`
+and re-applied on every rebuild, so they never get lost. To refresh them, export the
+players sheet from the game's Stats screen and either:
+
+```bash
+./.venv/bin/python -m eldraft.cli refresh --sheet ~/Downloads/players_stats.xlsx
+```
+
+or drop the export at `data/players_stats.xlsx` and push — the workflow imports it and
+rebuilds everything.
+
 Backtests:
 
 ```bash

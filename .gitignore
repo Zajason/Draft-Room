@@ -1,6 +1,8 @@
 .venv/
 data/*
 !data/board.json
+!data/prices_official.json
+!data/players_stats.xlsx
 out/*
 !out/*.json
 __pycache__/

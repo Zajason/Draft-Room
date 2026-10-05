@@ -167,3 +167,49 @@ def apply_official_prices(board: dict, rows: List[dict], tag: str = "official") 
 def import_prices(board: dict, sheet_path: str, tag: str = "official") -> dict:
     """Read the export and apply it; returns the match report."""
     return apply_official_prices(board, read_quotations(sheet_path), tag=tag)
+
+
+# Official prices are persisted here so a weekly rebuild keeps the real credit values
+# without re-importing the (login-gated) export every time - the file is re-applied by
+# build_board, and refreshed whenever a new export is imported.
+from .config import DATA  # noqa: E402
+
+PRICES_PATH = os.path.join(DATA, "prices_official.json")
+
+
+def save_official_prices(board: dict, path: str = PRICES_PATH) -> int:
+    """Persist {code: price} for every officially-priced player and coach."""
+    import datetime as _dt
+    import json as _json
+    prices = {}
+    for p in board.get("players", []) + board.get("coaches", []):
+        if p.get("price_source") == "official" and p.get("code") and p.get("price") is not None:
+            prices[p["code"]] = round(float(p["price"]), 1)
+    with open(path, "w") as fh:
+        _json.dump({"updated": _dt.date.today().isoformat(), "prices": prices}, fh, indent=0)
+    return len(prices)
+
+
+def apply_saved_prices(board: dict, path: str = PRICES_PATH, tag: str = "official") -> int:
+    """Re-apply persisted official prices onto a freshly built board, matched by code."""
+    import json as _json
+    if not os.path.exists(path):
+        return 0
+    try:
+        data = _json.load(open(path))
+    except (ValueError, OSError):
+        return 0
+    prices = data.get("prices") or {}
+    n = 0
+    for p in board.get("players", []) + board.get("coaches", []):
+        pr = prices.get(p.get("code"))
+        if pr is not None:
+            p["price"] = float(pr)
+            p["price_source"] = tag
+            n += 1
+    if n:
+        from . import ratings
+        ratings.attach_value_ratings(board.get("players", []))
+        for c in board.get("coaches", []):
+            c["fp_per_credit"] = round(c["fp"] / c["price"], 3) if c.get("price") else None
+    return n
